@@ -1,7 +1,15 @@
 {
   "name": "antigravity-pulse",
-  "display_name": "Antigrative Dashboard",
-  "description": "Token throughput, cache hit, context window and quotas on Windows, Linux and macOS. English / Chinese switching.",
+  "displayName": "Antigravity Progress Bar",
+  "display_name": "Antigravity Progress Bar",
+  "description": "Token throughput, cache hit, context window, quota forecast, 24h hourly usage and CNY/USD cost dashboard on Windows, Linux and macOS.",
   "version": "0.9.7",
-  "logo": "assets/logo.svg"
+  "logo": "assets/logo.svg",
+  "license": "MIT",
+  "author": {
+    "name": "yanhyhuan",
+    "url": "https://github.com/yanhyhuan"
+  },
+  "homepage": "https://github.com/yanhyhuan/Antigravity-Progress-Bar",
+  "repository": "https://github.com/yanhyhuan/Antigravity-Progress-Bar"
 }

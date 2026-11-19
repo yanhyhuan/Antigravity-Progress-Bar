@@ -35,7 +35,7 @@ def checked_assets(root, tag):
             archive.getinfo(prefix + required)
         for required in IDE_RUNTIME_MODULES:
             archive.getinfo(prefix + required)
-        for required in ['compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/usage.mjs']:
+        for required in ['compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/usage.mjs', 'sidecars/panel/pricing.mjs']:
             archive.getinfo(prefix + required)
         for required in LARGE_CONVERSATION_MODULES:
             archive.getinfo(prefix + required)
@@ -67,7 +67,7 @@ def checked_assets(root, tag):
             archive.getinfo(name)
         for name in IDE_RUNTIME_MODULES:
             archive.getinfo('extension/' + name)
-        for name in ['compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/usage.mjs']:
+        for name in ['compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/usage.mjs', 'sidecars/panel/pricing.mjs']:
             archive.getinfo('extension/' + name)
         for name in LARGE_CONVERSATION_MODULES:
             archive.getinfo('extension/' + name)
@@ -111,7 +111,7 @@ def publish(client, tag, commit, notes, assets):
     release = client.find(tag)
     if release and not release['draft']:
         raise ValueError('Release is already public; withdraw it before replacing its package')
-    details = {'tag_name': tag, 'target_commitish': commit, 'name': 'Antigrative Dashboard ' + tag,
+    details = {'tag_name': tag, 'target_commitish': commit, 'name': 'Antigravity Progress Bar ' + tag,
                'body': notes, 'draft': True, 'prerelease': False}
     release = client.request('PATCH', 'releases/' + str(release['id']), details) if release else client.request('POST', 'releases', details)
     # All replacements happen while the release is private. Failed uploads leave
