@@ -102,6 +102,11 @@ export function dateKey(time,zone='Asia/Shanghai'){
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(time);
   const get=key=>parts.find(p=>p.type===key).value;return `${get('year')}-${get('month')}-${get('day')}`;
 }
+export function hourKey(time,zone='Asia/Shanghai'){
+  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:zone,hour:'2-digit',hourCycle:'h23'}).formatToParts(time);
+  return parseInt(parts.find(p=>p.type==='hour').value,10);
+}
+export const HOUR_DAYS=120,HOURS_BUDGET=1.5*1024*1024;
 export function usageRecords(raw,conversationId,{maxRows=Infinity,maxBytes=Infinity}={}){
   const trajectory=raw?.trajectory||{},rows=new Map(),steps=trajectory.steps||[];let bytes=0;
   for(const [index,g] of (trajectory.generatorMetadata||[]).entries()){
@@ -358,7 +363,11 @@ export class UsageLedger{
             }catch{unreadable++;}
           }
         }
-        const windowCounts={};
+        const windowCounts={},groupedHours=new Map(),hoursFrom=dateKey(now-HOUR_DAYS*86400000,this.timeZone);
+        const dayFmt=new Intl.DateTimeFormat('en-CA',{timeZone:this.timeZone,year:'numeric',month:'2-digit',day:'2-digit'});
+        const hourFmt=new Intl.DateTimeFormat('en-GB',{timeZone:this.timeZone,hour:'2-digit',hourCycle:'h23'});
+        const fastDate=t=>{const p=dayFmt.formatToParts(t),g=k=>p.find(x=>x.type===k).value;return `${g('year')}-${g('month')}-${g('day')}`;};
+        const fastHour=t=>parseInt(hourFmt.formatToParts(t).find(x=>x.type==='hour').value,10);
         for(const r of seen.values()){
           models.add(r.model);if(r.partial)partialRequests++;
           if(specs.length&&r.at!==null&&acctIds.has(r.id)){
@@ -368,17 +377,32 @@ export class UsageLedger{
             }
           }
           if(r.at===null){unknownTokens+=sum(r);unknownRequests++;continue;}
-          const date=dateKey(r.at,this.timeZone);if(!daily.has(date))daily.set(date,{date,models:{}});
-          const day=daily.get(date);day.models[r.model]||={uncached:0,cacheRead:0,cacheWrite:0,output:0,total:0,requests:0};
+          const date=fastDate(r.at);if(!daily.has(date))daily.set(date,{date,models:{}});
+          const day=daily.get(date);
+          if(!Object.hasOwn(day.models,r.model))Object.defineProperty(day.models,r.model,{value:{uncached:0,cacheRead:0,cacheWrite:0,output:0,total:0,requests:0},enumerable:true,configurable:true,writable:true});
           const bucket=day.models[r.model];for(const key of keys)bucket[key]+=r[key]??0;bucket.total+=sum(r);bucket.requests++;
+          if(date>=hoursFrom){
+            const h=fastHour(r.at);let hours=groupedHours.get(date);if(!hours)groupedHours.set(date,hours={});
+            const hour=hours[h]||={uncached:0,cacheRead:0,cacheWrite:0,output:0,total:0,requests:0,models:{}};
+            for(const key of keys)hour[key]+=r[key]??0;hour.total+=sum(r);hour.requests++;
+            if(!Object.hasOwn(hour.models,r.model))Object.defineProperty(hour.models,r.model,{value:{total:0},enumerable:true,configurable:true,writable:true});
+            hour.models[r.model].total+=sum(r);
+          }
         }
         const days=[...daily.values()].sort((a,b)=>a.date.localeCompare(b.date));
+        let hoursUsed=0,earliest=null,truncated=false;
+        for(const d of [...groupedHours.keys()].sort().reverse()){
+          const hours=groupedHours.get(d),size=Buffer.byteLength(JSON.stringify(hours));
+          if(hoursUsed+size>HOURS_BUDGET){truncated=true;break;}
+          hoursUsed+=size;earliest=d;
+        }
+        for(const day of days)if(groupedHours.has(day.date)&&(!earliest||day.date>=earliest))day.hours=groupedHours.get(day.date);
         const total=day=>Object.values(day.models).reduce((n,r)=>n+r.total,0);
         const value={accountKey:allBuckets?'all-local':scope,timeZone:this.timeZone,today,days,models:[...models].sort(),todayTokens:days.filter(d=>d.date===today).reduce((n,d)=>n+total(d),0),
           weekTokens:days.filter(d=>d.date>=weekStart(today)&&d.date<=today).reduce((n,d)=>n+total(d),0),
           monthTokens:days.filter(d=>d.date.slice(0,7)===today.slice(0,7)&&d.date<=today).reduce((n,d)=>n+total(d),0),
           totalTokens:days.reduce((n,d)=>n+total(d),0)+unknownTokens,unknownTokens,unknownRequests,partialRequests,unreadableFiles:unreadable,
-          requests:seen.size,firstDate:days[0]?.date||null,updatedAt:new Date(now).toISOString(),source:this.source,...(allBuckets?{accountsCount:activeAccounts.size}:{})};
+          requests:seen.size,firstDate:days[0]?.date||null,updatedAt:new Date(now).toISOString(),source:this.source,hoursFrom:truncated&&earliest?earliest:hoursFrom,...(allBuckets?{accountsCount:activeAccounts.size}:{})};
         if(specs.length)Object.defineProperty(value,'_quotaWindowCounts',{value:windowCounts,enumerable:false,configurable:true});
         return value;
       })().finally(()=>{if(this.jsonSummaryPending.get(pendingKey)===scan)this.jsonSummaryPending.delete(pendingKey);});
