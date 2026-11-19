@@ -87,6 +87,22 @@ Antigravity 扩展目前尚未兼容。详见 [IDE 安装、更新、诊断和�
 
 ## 安装
 
+### 方式一：在 Antigravity「自定义插件」中自动安装（推荐）
+
+在 Antigravity 客户端左侧栏进入 **Skills & Customizations → Plugins**，添加自定义插件源地址即可一键点击安装（后台守护进程会自动配置本地回环调试启动入口）：
+
+```text
+https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/marketplace.json
+```
+
+### 方式二：PowerShell 一行免克隆自动安装（Windows）
+
+```powershell
+irm https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/install.ps1 | iex
+```
+
+### 方式三：手动克隆安装
+
 以下命令安装**桌面 App 适配器**；IDE 用户请使用[上方专用 VSIX 安装流程](#antigravity-ide)。
 
 适用于 **Windows / Linux / macOS 的 Antigravity 桌面 App 2.21.1 – 2.33.0 + Python 3.10+**。三系统共用同一个 release ZIP，无 pip / npm 第三方依赖，后台使用 App 自带 Node.js。各平台完整验证范围见 [COMPATIBILITY.md](COMPATIBILITY.md)。

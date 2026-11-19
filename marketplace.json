@@ -1,0 +1,35 @@
+{
+  "name": "antigravity-progress-bar",
+  "description": "Antigravity Progress Bar custom plugin marketplace catalog.",
+  "plugins": [
+    {
+      "name": "antigravity-pulse",
+      "displayName": "Antigravity Progress Bar",
+      "version": "0.9.7",
+      "description": "Token throughput, cache hit, context window, quota forecast, 24h hourly usage and CNY/USD cost dashboard on Windows, Linux and macOS.",
+      "logo": "https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/assets/logo.svg",
+      "category": "Developer Tools",
+      "keywords": [
+        "antigravity",
+        "dashboard",
+        "progress-bar",
+        "quota",
+        "tokens",
+        "cost",
+        "tps"
+      ],
+      "author": {
+        "name": "yanhyhuan",
+        "url": "https://github.com/yanhyhuan"
+      },
+      "homepage": "https://github.com/yanhyhuan/Antigravity-Progress-Bar",
+      "repository": "https://github.com/yanhyhuan/Antigravity-Progress-Bar",
+      "license": "MIT",
+      "source": {
+        "type": "archive",
+        "url": "https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases/download/v0.9.7/antigrative-dashboard-0.9.7.zip",
+        "sha256": "f9d8a655fb5c8d5e2099abc5a4c2cbc4298cb8e44269b43fff3ecfec564bdead"
+      }
+    }
+  ]
+}

@@ -91,6 +91,22 @@ Available in **v0.6.0**: an independent adapter for the official Antigravity CLI
 
 ## Install
 
+### Option 1: Auto-install via Antigravity Custom Plugins (Recommended)
+
+In Antigravity (**Skills & Customizations → Plugins**), add the custom marketplace URL below and click **Install**:
+
+```text
+https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/marketplace.json
+```
+
+### Option 2: One-line PowerShell Install (Windows)
+
+```powershell
+irm https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/install.ps1 | iex
+```
+
+### Option 3: Manual Clone
+
 The commands below install the **desktop App adapter**. IDE users should use the [separate VSIX instructions above](#antigravity-ide).
 
 Supported: **Windows, Linux and macOS; Antigravity desktop App 2.21.1 – 2.33.0; Python 3.10+**. The same release ZIP works on all three systems. No third-party pip or npm packages are needed to install or run the plugin. The sidecar uses the app's bundled Node.js runtime. See [COMPATIBILITY.md](COMPATIBILITY.md) for the per-platform verification scope.
