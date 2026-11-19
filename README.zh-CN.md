@@ -2,9 +2,9 @@
 
 <img src="docs/assets/hero-zh.png?v=0.9.1" width="100%" alt="Antigrative Dashboard v0.9.1：像素猫速度、缓存和上下文控件，就在输入框旁。">
 
-# Antigrative Dashboard
+# Antigravity Progress Bar
 
-模型选择旁只显示生成速率、缓存和上下文占用；悬停上下文，一并查看消耗预测、周期用量与 5 小时 / 周额度详情。<br>
+基于官方最新 `v0.9.7` 融合增强：模型选择旁常驻生成速率、缓存、上下文与额度耗尽预测（含像素猫与 Neon 氖龙彩蛋），并在「用量统计」看板内置 **人民币 `¥` / 美元 `$` 成本估算与排序**、**单日 24 小时活跃柱状图**、**构成分项过滤** 与 **柱子点击下钻筛选**。<br>
 缩略信息常驻；鼠标悬停，才展开详细统计。
 
 [![Version 0.9.7](https://img.shields.io/badge/version-0.9.7-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)

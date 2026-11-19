@@ -2,9 +2,9 @@
 
 <img src="docs/assets/hero.png?v=0.9.1" width="100%" alt="Antigrative Dashboard v0.9.1: pixel-cat speed, cache and context controls beside the input.">
 
-# Antigrative Dashboard
+# Antigravity Progress Bar
 
-Token throughput, cache hits and context usage in the model selector row. Hover over context for pace forecasts, window usage and five-hour / weekly quotas too.<br>
+Token throughput, cache hits and context usage in the model selector row — merged with **24h hourly activity**, **CNY / USD cost estimation**, **component filters** and **interactive bar drill-down** on top of upstream `v0.9.7`.<br>
 Keep the summary visible. Hover for the details.
 
 [![Version 0.9.7](https://img.shields.io/badge/version-0.9.7-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)

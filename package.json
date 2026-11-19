@@ -1,8 +1,8 @@
 {
-  "name": "antigrative-dashboard",
+  "name": "antigravity-progress-bar",
   "version": "0.9.7",
   "private": true,
-  "description": "Compact Antigravity token throughput and quota widget",
+  "description": "Antigravity Progress Bar — Compact token throughput, quota forecast, 24h hourly usage and CNY/USD cost dashboard",
   "license": "MIT",
   "scripts": {
     "test": "node --test --test-timeout=60000 sidecars/panel/tests/*.test.mjs cli/tests/*.test.mjs",
