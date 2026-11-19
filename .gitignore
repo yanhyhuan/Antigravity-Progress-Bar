@@ -8,4 +8,5 @@ dist/
 *.asar
 *.original
 settings.json
+notify-settings.json
 patch.json

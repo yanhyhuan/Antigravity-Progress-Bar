@@ -43,7 +43,7 @@ class FileUpdateTests(unittest.TestCase):
         self.target = self.home / '.gemini/config/plugins/antigravity-pulse'
         for name in worker.REQUIRED:
             self.write(self.target / name, self.content(name, '0.8.8'))
-        for group in worker.RUNTIME[:3]:
+        for group in worker.RUNTIME_DIRS:
             self.write(self.target / group / 'obsolete.txt', 'old-' + group)
         self.private = self.target / 'sidecars/panel/data/history-v1/record.json'
         self.write(self.private, 'saved usage and preferences')
@@ -67,7 +67,7 @@ class FileUpdateTests(unittest.TestCase):
         stage = working / 'stage'
         for relative in worker.REQUIRED:
             self.write(stage / relative, self.content(relative, '0.8.9'))
-        for group in worker.RUNTIME[:3]:
+        for group in worker.RUNTIME_DIRS:
             self.write(stage / group / 'new.txt', 'new-' + group)
             self.write(stage / group / 'zz-last.txt', 'last-' + group)
         return working, stage
@@ -101,7 +101,7 @@ class FileUpdateTests(unittest.TestCase):
     def test_real_termination_before_and_after_every_group_and_mid_file_recovers_exactly(self):
         before = self.snapshot()
         points = ['before:' + group for group in worker.RUNTIME]
-        points += ['after:' + group + '/zz-last.txt' for group in worker.RUNTIME[:3]]
+        points += ['after:' + group + '/zz-last.txt' for group in worker.RUNTIME_DIRS]
         points += ['after:plugin.json', 'after:assets/logo.svg', 'after:compat/i18n.cjs', 'after:sidecars/panel/main.mjs']
         for index, point in enumerate(points):
             with self.subTest(point=point):

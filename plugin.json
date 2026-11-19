@@ -2,7 +2,7 @@
   "name": "antigravity-pulse",
   "displayName": "Antigravity Progress Bar",
   "display_name": "Antigravity Progress Bar",
-  "description": "Token throughput, cache hit, context window, quota forecast, 24h hourly usage and CNY/USD cost dashboard on Windows, Linux and macOS.",
+  "description": "Token throughput, cache hit, context window, quota forecast, 24h hourly usage, CNY/USD cost dashboard, and Windows task completion notifications.",
   "version": "0.9.7",
   "logo": "assets/logo.svg",
   "license": "MIT",
@@ -11,5 +11,10 @@
     "url": "https://github.com/yanhyhuan"
   },
   "homepage": "https://github.com/yanhyhuan/Antigravity-Progress-Bar",
-  "repository": "https://github.com/yanhyhuan/Antigravity-Progress-Bar"
+  "repository": "https://github.com/yanhyhuan/Antigravity-Progress-Bar",
+  "suggestedPrompts": [
+    "把任务完成提醒的最短耗时改成 60 秒",
+    "打开或关闭任务完成提醒的语音播报",
+    "暂时关闭任务完成提醒（保留进度条面板）"
+  ]
 }

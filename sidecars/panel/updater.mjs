@@ -17,7 +17,7 @@ const updateError=(code,detail)=>Object.assign(Error(code),{detail:safeDetail(de
 export function releaseRuntimeDirectory(pluginDir,{platform=process.platform,cwd=()=>process.cwd(),chdir=dir=>process.chdir(dir)}={}){
  if(platform!=='win32')return false;
  const root=win32.resolve(pluginDir),current=win32.resolve(cwd());
- for(const name of ['assets','compat','sidecars']){
+ for(const name of ['assets','compat','sidecars','hooks','sounds']){
   const relative=win32.relative(win32.join(root,name),current);
   if(relative===''||relative!=='..'&&!relative.startsWith('..\\')&&!win32.isAbsolute(relative)){chdir(root);return true;}
  }

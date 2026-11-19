@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "minSeconds": 30,
+  "notifyOnError": true,
+  "sound": true,
+  "speak": true,
+  "speakVolume": 1.0,
+  "titleDone": "Antigravity：任务完成",
+  "titleError": "Antigravity：任务出错停下了",
+  "speakDone": "任务完成啦，回来看看吧",
+  "speakError": "任务出错了，快来看看",
+  "audioDone": "sounds/done.mp3",
+  "audioError": "sounds/error.mp3"
+}

@@ -1,0 +1,11 @@
+{
+  "task-done-notify": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File hooks/on-stop.ps1 || echo {}",
+        "timeout": 10
+      }
+    ]
+  }
+}

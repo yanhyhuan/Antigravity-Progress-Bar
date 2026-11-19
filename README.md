@@ -64,6 +64,7 @@ Keep the summary visible. Hover for the details.
 - **Discoverable language settings.** English is the default. A compact bilingual first-use tip beside context opens the English / 简体中文 / 繁體中文 choices at the bottom of its detail card. The panel and usage window offer the same three choices through their language menu. Preferences survive restarts. Choosing a language or closing the tip saves completion, so it does not return on restart. Closing the tip does not change the language; failed saves offer a retry. Subagent composers do not repeat the tip. Language changes do not change the UTC+8 usage accounting boundaries.
 - **Theme adaptation.** Controls, cards and quota menus follow Antigravity's light/dark mode and custom background, card, text and accent colors, with readable text and OS fallback in standalone previews. Live changes require no restart or conversation reload.
 - **Local collection.** The collector talks to loopback endpoints. It does not upload your metrics to a third-party service.
+- **Windows task completion notifications.** Bundled `Stop` hook triggers a native Windows toast and sound/voice alert when long-running turns finish (default ≥30s) or stop on error, ignoring short Q&A and manual cancellations; user overrides in `notify-settings.json` are preserved across reinstalls and in-app updates.
 
 ## Antigravity IDE
 

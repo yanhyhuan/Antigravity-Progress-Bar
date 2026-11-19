@@ -149,7 +149,7 @@ class UpdateWorkerTests(unittest.TestCase):
         return {str(p.relative_to(self.target)): p.read_bytes() for p in self.target.rglob('*') if p.is_file()}
 
     def populate(self):
-        for name in worker.RUNTIME[:3]:
+        for name in worker.RUNTIME_DIRS:
             (self.target / name).mkdir(exist_ok=True)
             (self.target / name / 'old.txt').write_text('old-' + name)
         private = self.target / 'sidecars/panel/data/history-v1'

@@ -29,7 +29,9 @@ _lock_spec.loader.exec_module(_lock_module)
 lifecycle_lock, linked = _lock_module.lifecycle_lock, _lock_module.linked
 
 REPO = 'yanhyhuan/Antigravity-Progress-Bar'
-RUNTIME = ('assets', 'compat', 'sidecars', 'plugin.json')
+RUNTIME_DIRS = ('assets', 'compat', 'sidecars', 'hooks', 'sounds')
+RUNTIME_ROOT_FILES = ('plugin.json', 'hooks.json')
+RUNTIME = (*RUNTIME_DIRS, *RUNTIME_ROOT_FILES)
 class RollbackError(RuntimeError):
     pass
 
@@ -91,10 +93,12 @@ def transaction_roots(target, working):
 
 
 PRIVATE = {'data', 'history-v1', 'usage-v1', 'sdk'}
-REQUIRED = ('plugin.json', 'compat/inline-widget.cjs', 'compat/runtime-ui.mjs',
+REQUIRED = ('plugin.json', 'hooks.json', 'compat/inline-widget.cjs', 'compat/runtime-ui.mjs',
             'compat/i18n.cjs', 'compat/theme.cjs', 'compat/launch-config.mjs',
             'compat/launch_config.py', 'sidecars/panel/main.mjs',
-            'sidecars/panel/metrics.mjs', 'sidecars/panel/history.mjs', 'assets/logo.svg')
+            'sidecars/panel/metrics.mjs', 'sidecars/panel/history.mjs',
+            'hooks/on-stop.ps1', 'hooks/toast.ps1', 'hooks/default-settings.json',
+            'sounds/done.mp3', 'sounds/error.mp3', 'assets/logo.svg')
 MAX_ZIP = 64 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 CHECK_BUDGET = 60
@@ -468,7 +472,7 @@ def file_inventory(value):
                 '\\' in name or ':' in name or any(p in ('.', '..') or p.lower() in PRIVATE or
                 p.rstrip(' .') != p or p.split('.')[0].upper() in reserved or
                 re.search(r'[\x00-\x1f<>"|?*]', p) for p in parts) or
-                not (name == 'plugin.json' or len(parts) > 1 and parts[0] in RUNTIME[:3])):
+                not (name in RUNTIME_ROOT_FILES or len(parts) > 1 and parts[0] in RUNTIME_DIRS)):
             raise ValueError('Invalid update file path')
         key = name.casefold()
         if key in seen:
@@ -714,7 +718,7 @@ def install_staged(stage, target, backup, current, expected, fault=None, progres
         return
     # Preserve old sidecar-local preferences/statistics if an older installer
     # stored them inside its runtime instead of the current external data root.
-    for name in RUNTIME[:3]:
+    for name in RUNTIME_DIRS:
         old = target / name
         if old.is_dir():
             for directory, dirs, _ in os.walk(old):

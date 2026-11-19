@@ -23,8 +23,8 @@ CONFIG = HOME / '.gemini' / 'config' / 'config.json'
 SETTINGS = _paths['settings']
 APP = _paths['app']
 BACKUPS = _paths['backups']
-RUNTIME_FILES = ('assets', 'compat', 'sidecars', 'plugin.json')
-DIST_FILES = ('plugin.json', 'assets', 'sidecars', 'compat', 'cli', 'ide', 'manage.py', 'install.ps1',
+RUNTIME_FILES = ('assets', 'compat', 'sidecars', 'hooks', 'sounds', 'plugin.json', 'hooks.json')
+DIST_FILES = ('plugin.json', 'hooks.json', 'assets', 'sidecars', 'compat', 'hooks', 'sounds', 'cli', 'ide', 'manage.py', 'install.ps1',
               'uninstall.ps1', 'install.sh', 'uninstall.sh', 'README.md', 'LICENSE', 'CHANGELOG.md', 'COMPATIBILITY.md', 'docs', 'package.json',
               '.gitignore', '.gitattributes', '.github', 'tests', 'tools', 'GITHUB_RELEASE.md', 'README.zh-CN.md')
 IGNORED = {'__pycache__', '.data', 'node_modules', '.git', 'dist', 'data', 'history-v1', 'usage-v1', 'sdk'}
@@ -139,6 +139,10 @@ def install(panel_only=False, legacy_loader=False):
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.log', '.data', 'node_modules', 'data', 'history-v1', 'sdk'))
         else:
             shutil.copy2(source, target)
+    default_notify = SOURCE / 'hooks' / 'default-settings.json'
+    user_notify = PLUGIN / 'notify-settings.json'
+    if default_notify.is_file() and not user_notify.exists():
+        shutil.copy2(default_notify, user_notify)
     if legacy_loader:
         subprocess.run([sys.executable, str(SOURCE / 'compat' / 'patch-loader.py'), '--apply'], check=True,
                        env={**os.environ, 'AG_PULSE_APP_ASAR': str(APP)})

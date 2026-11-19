@@ -50,6 +50,8 @@ def checked_assets(root, tag):
             archive.getinfo(prefix + required)
         for required in ['install.sh', 'uninstall.sh', 'install.ps1', 'compat/runtime-ui.mjs', 'compat/launch-config.mjs', 'compat/launch_config.py', 'compat/theme.cjs', 'compat/host-theme.mjs', 'compat/preferences.mjs', 'compat/sidecar-owner.mjs', 'sidecars/panel/context.mjs', 'cli/statusline.mjs', 'cli/metrics.mjs', 'cli/render.mjs', 'cli/lifecycle.py', 'docs/CLI.md', 'docs/assets/cli-conversation.png', 'docs/assets/cli-conversation-zh.png']:
             archive.getinfo(prefix + required)
+        for required in ['hooks.json', 'hooks/on-stop.ps1', 'hooks/toast.ps1', 'hooks/default-settings.json', 'sounds/done.mp3', 'sounds/error.mp3']:
+            archive.getinfo(prefix + required)
     ide_version = json.loads((root / 'ide/package.json').read_text(encoding='utf-8'))['version']
     if ide_version != version:
         raise ValueError('IDE and desktop versions differ')
