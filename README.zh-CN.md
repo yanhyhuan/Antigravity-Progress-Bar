@@ -87,18 +87,20 @@ Antigravity 扩展目前尚未兼容。详见 [IDE 安装、更新、诊断和�
 
 ## 安装
 
-### 方式一：在 Antigravity「自定义插件」中自动安装（推荐）
+### 方式一：PowerShell 一行免克隆自动安装（Windows 推荐）
 
-在 Antigravity 客户端左侧栏进入 **Skills & Customizations → Plugins**，添加自定义插件源地址即可一键点击安装（后台守护进程会自动配置本地回环调试启动入口）：
-
-```text
-https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/marketplace.json
-```
-
-### 方式二：PowerShell 一行免克隆自动安装（Windows）
+打开 PowerShell 执行以下单行命令，会自动从 GitHub Release 下载最新安装包、校验 SHA-256 并配置桌面端调试入口（安装后在客户端左侧 **自定义 → 已安装** 中即可看到插件与开关）：
 
 ```powershell
 irm https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/install.ps1 | iex
+```
+
+### 方式二：在 Antigravity 对话中让 AI 自动安装
+
+直接在聊天框发送给 Agent：
+
+```text
+请帮我安装并启用 https://github.com/yanhyhuan/Antigravity-Progress-Bar
 ```
 
 ### 方式三：手动克隆安装

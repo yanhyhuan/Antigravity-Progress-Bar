@@ -91,18 +91,20 @@ Available in **v0.6.0**: an independent adapter for the official Antigravity CLI
 
 ## Install
 
-### Option 1: Auto-install via Antigravity Custom Plugins (Recommended)
+### Option 1: One-line PowerShell Auto-Install (Windows Recommended)
 
-In Antigravity (**Skills & Customizations → Plugins**), add the custom marketplace URL below and click **Install**:
-
-```text
-https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/marketplace.json
-```
-
-### Option 2: One-line PowerShell Install (Windows)
+Run in PowerShell to download the latest GitHub Release, verify SHA-256, and configure the desktop launch shortcut automatically (appears under **Customizations → Installed**):
 
 ```powershell
 irm https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/install.ps1 | iex
+```
+
+### Option 2: Let Antigravity Agent Install Automatically
+
+Paste into an Antigravity chat:
+
+```text
+Please install and enable https://github.com/yanhyhuan/Antigravity-Progress-Bar
 ```
 
 ### Option 3: Manual Clone
