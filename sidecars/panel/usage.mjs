@@ -9,6 +9,7 @@ import {discoverLocalConversations,conversationId} from './local-conversations.m
 import {setImmediate as yieldToLiveRequests} from 'node:timers/promises';
 import {delegatedIds} from './delegation.mjs';
 import {collectionFailure} from './collection-state.mjs';
+import {PricingService} from './pricing.mjs';
 const HASH=/^[a-f0-9]{64}$/,GUID=/^[a-f0-9-]{36}$/i;
 const hash=value=>createHash('sha256').update(value).digest('hex');
 export const LOCAL_SCOPE=hash('ag-pulse:local-unauthenticated');
@@ -395,8 +396,11 @@ export function weekStart(date){const d=new Date(date+'T00:00:00Z');d.setUTCDate
 export class DesktopUsage{
   constructor(store,ledger=new UsageLedger(),{host=null,discoverLocal=null,owns=()=>true,now=Date.now,sliceMs=1500,continueDelay=1200,itemDelay=undefined,
     maxCandidates=20,maxCandidatesPerSlice=8,maxPassMs=15000,maxMapEntries=4096,localScanMs=30000,
-    liveMaxConversations=16,liveMaxRows=8192,liveMaxBytes=4*1024*1024,liveMaxGroups=128,liveMaxRecoveryGuards=16,liveMaxRecoveries=256,liveRetryMs=1000,livePollMs=1000,liveRecoveryPollMs=1000,liveBackgroundPollMs=1000,liveBackgroundRetryMs=60000}={}){
+    liveMaxConversations=16,liveMaxRows=8192,liveMaxBytes=4*1024*1024,liveMaxGroups=128,liveMaxRecoveryGuards=16,liveMaxRecoveries=256,liveRetryMs=1000,livePollMs=1000,liveRecoveryPollMs=1000,liveBackgroundPollMs=1000,liveBackgroundRetryMs=60000,pricing=null}={}){
     this.store=store;this.ledger=ledger;this.fingerprints=new Map();this.host=host;this.owns=()=>owns()===true;this.now=now;
+    this.lastModels=[];
+    this.pricing=pricing===false?null:pricing===true?new PricingService(ledger.directory):pricing;
+    if(this.pricing?.init)void this.pricing.init();
     this.discoverLocal=discoverLocal||(()=>host?discoverLocalConversations({host}):Promise.resolve({conversations:[],errors:0}));
     this.customDiscover=Boolean(discoverLocal);this.localScanMs=localScanMs;this.localScanAt=-Infinity;this.localScanResult=null;
     this.sliceMs=sliceMs;this.continueDelay=continueDelay;this.itemDelay=Number.isFinite(itemDelay)&&itemDelay>=0?itemDelay:(continueDelay>=100?80:0);this.maxCandidates=maxCandidates;this.maxCandidatesPerSlice=maxCandidatesPerSlice;
@@ -615,7 +619,8 @@ export class DesktopUsage{
     const state=this.liveStates.get(scope+':'+String(id).toLowerCase());
     if(state?.needsDisk&&state.backgroundRequested&&state.epoch===epoch&&this.liveRecoveryCurrent(state)){state.backgroundCommitted=true;this.scheduleLive(state,0);}
   }
-  sync(forceFull=false){
+  sync(forceFull=false,models=this.lastModels){
+    if(forceFull)void this.pricing?.fetchCloud?.(models,true);
     if(this.disposed||!this.owns())return Promise.resolve();
     if(forceFull)this.forceQueued=true;
     if(this.pending)return this.pending;
@@ -779,17 +784,18 @@ export class DesktopUsage{
     if(requestedScope==='account'&&!identity){
       const today=dateKey(Date.now(),this.ledger.timeZone),accountsCount=await this.ledger.countAccounts();
       if(!current())return null;
-      return {accountKey:null,activeAccountKey:null,scope:'account',accountAvailable:false,accountsCount,timeZone:this.ledger.timeZone,today,days:[],models:[],todayTokens:0,weekTokens:0,monthTokens:0,totalTokens:0,unknownTokens:0,unknownRequests:0,partialRequests:0,unreadableFiles:0,requests:0,firstDate:null,updatedAt:new Date().toISOString(),source:this.ledger.source,quotaWindows:{},syncing,status:syncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true};
+      return {accountKey:null,activeAccountKey:null,scope:'account',accountAvailable:false,accountsCount,timeZone:this.ledger.timeZone,today,days:[],models:[],todayTokens:0,weekTokens:0,monthTokens:0,totalTokens:0,unknownTokens:0,unknownRequests:0,partialRequests:0,unreadableFiles:0,requests:0,firstDate:null,updatedAt:new Date().toISOString(),source:this.ledger.source,quotaWindows:{},syncing,status:syncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true,...(this.pricing?{pricing:this.pricing.snapshot([])}:{})};
     }
     const ledgerTarget=requestedScope==='account'?identity:'all';
     const value=await this.ledger.summary(ledgerTarget,Date.now(),{isCurrent:current,groups:identity?groups:null,quotaAccount:identity,preferCachedMaxAgeMs:backfillActive?5000:0});if(!current())return null;
+    if(value?.models?.length){this.lastModels=value.models;void this.pricing?.fetchCloud?.(value.models,false);}
     if(scope!==undefined&&!syncing&&!value?.summaryStale&&identity&&!this.ledger.diskSummaryPending&&!this.ledger.usageWrites.size){
       const otherScope=requestedScope==='local'?identity:'all';
       const prefix=otherScope+':'+value.today;
       if(![...this.ledger.caches.keys()].some(k=>k.startsWith(prefix)))void this.ledger.summary(otherScope,Date.now(),{isCurrent:current,groups,quotaAccount:identity}).catch(()=>{});
     }
     const stillSyncing=syncing||value?.summaryStale===true;
-    return {...value,scope:requestedScope,accountKey:requestedScope==='local'?'all-local':identity,activeAccountKey:identity||null,accountAvailable:Boolean(identity),syncing:stillSyncing,status:stillSyncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true};
+    return {...value,scope:requestedScope,accountKey:requestedScope==='local'?'all-local':identity,activeAccountKey:identity||null,accountAvailable:Boolean(identity),syncing:stillSyncing,status:stillSyncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true,...(this.pricing?{pricing:this.pricing.snapshot(value?.models)}:{}),};
   }
-  dispose(){this.disposed=true;this.forceQueued=false;clearTimeout(this.continuation);this.continuation=null;clearTimeout(this.liveRecoveryTimer);this.liveRecoveryTimer=null;this.refreshLiveScope();this.fullRemaining.clear();this.fullJournal=null;}
+  dispose(){this.disposed=true;this.forceQueued=false;clearTimeout(this.continuation);this.continuation=null;clearTimeout(this.liveRecoveryTimer);this.liveRecoveryTimer=null;this.refreshLiveScope();this.fullRemaining.clear();this.fullJournal=null;this.pricing?.dispose?.();}
 }
