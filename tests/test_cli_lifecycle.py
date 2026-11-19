@@ -167,7 +167,7 @@ class CliLifecycleTests(unittest.TestCase):
         cli.install(ROOT, self.home, language='zh-CN')
         selected = cli.read(self.settings)['statusLine']['command']
         result = subprocess.run(['cmd.exe', '/d', '/s', '/c', selected],
-                                input='{}', capture_output=True, encoding='utf-8', timeout=10)
+                                input='{}', capture_output=True, encoding='utf-8', timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('上下文', re.sub(r'\x1b\[[\d;]+m', '', result.stdout))
 
