@@ -138,9 +138,14 @@ class CliLifecycleTests(unittest.TestCase):
         except OSError:
             self.skipTest('Symlink creation requires OS permission')
         with self.assertRaises(RuntimeError): cli.install(ROOT, self.home)
-        self.runtime.unlink()
+        if os.name == 'nt':
+            self.runtime.rmdir()
+        else:
+            self.runtime.unlink()
         cli.install(ROOT, self.home)
-        (self.runtime / 'escape').symlink_to(target, target_is_directory=True)
+        nested = self.runtime / 'escape'
+        nested.symlink_to(target, target_is_directory=True)
+        self.addCleanup(lambda: (nested.rmdir() if os.name == 'nt' else nested.unlink()) if nested.is_symlink() else None)
         before = self.settings.read_bytes()
         with self.assertRaises(RuntimeError): cli.uninstall(self.home)
         self.assertEqual(self.settings.read_bytes(), before)

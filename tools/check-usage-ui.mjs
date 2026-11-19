@@ -132,7 +132,7 @@ try{
  await page.locator('[data-heat=week]').click();assert.ok((await page.locator('#heat button').count())>=52);const rows=await page.locator('#heat').evaluate(n=>new Set([...n.children].map(c=>Math.round(c.getBoundingClientRect().top))).size);assert.equal(rows,2);
  await page.locator('#details-tab').click();assert.equal(await page.locator('.bar-column').count(),31);assert.equal(await page.locator('#legend button').count(),5);
  assert.deepEqual(await frame(),initialFrame,'Overview and details share a stable modal frame');
- const chartFrame=()=>page.locator('.chart').evaluate(n=>{const r=n.getBoundingClientRect();return {x:r.x,width:r.width};}),initialChart=await chartFrame();
+ const chartFrame=()=>page.locator('#details .chart').evaluate(n=>{const r=n.getBoundingClientRect();return {x:r.x,width:r.width};}),initialChart=await chartFrame();
  for(let i=0;i<5;i++)await page.locator('#previous').click();assert.equal(await page.locator('#table-body tr').count(),0);assert.deepEqual(await frame(),initialFrame,'Empty months must not shrink/recenter the window');assert.deepEqual(await chartFrame(),initialChart,'Scrollbar changes must not move the chart');
  for(let i=0;i<5;i++)await page.locator('#next').click();assert.deepEqual(await frame(),initialFrame);
  const colors=await page.locator('#legend .dot').evaluateAll(ns=>ns.map(n=>getComputedStyle(n).backgroundColor));assert.equal(new Set(colors).size,5);
