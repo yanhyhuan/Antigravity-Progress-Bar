@@ -102,12 +102,17 @@ if ($cfg['speak'] -eq $true) {
         $player.Open([Uri]::new((Resolve-Path -LiteralPath $audioPath).Path))
         $player.Play()
         for ($i = 0; $i -lt 30; $i++) {
+          try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch {}
           if ($player.NaturalDuration.HasTimeSpan) { break }
           Start-Sleep -Milliseconds 100
         }
         $totalMs = if ($player.NaturalDuration.HasTimeSpan) { [int]$player.NaturalDuration.TimeSpan.TotalMilliseconds } else { 4000 }
         $remainMs = [Math]::Max(0, $totalMs - [int]$sw.ElapsedMilliseconds) + 250
-        Start-Sleep -Milliseconds $remainMs
+        $endAt = $sw.ElapsedMilliseconds + $remainMs
+        while ($sw.ElapsedMilliseconds -lt $endAt) {
+          try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch {}
+          Start-Sleep -Milliseconds 100
+        }
         $player.Close()
         $spoken = $true
       } catch {}

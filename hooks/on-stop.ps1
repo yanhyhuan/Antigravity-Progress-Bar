@@ -116,8 +116,21 @@ $job = [pscustomobject]@{
 $tmp = Join-Path $env:TEMP ("agy-notify-" + [guid]::NewGuid().ToString('N') + '.json')
 $job | ConvertTo-Json -Compress | Set-Content -LiteralPath $tmp -Encoding UTF8
 
-Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
-  '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
-  '-File', (Join-Path $PSScriptRoot 'toast.ps1'), '-JobFile', $tmp
-)
+$toastPath = Join-Path $PSScriptRoot 'toast.ps1'
+$launched = $false
+try {
+  # Spawn via Win32_Process so the detached audio/toast worker escapes the host's Job Object kill-on-close cleanup.
+  $startup = ([wmiclass]'Win32_ProcessStartup').CreateInstance()
+  $startup.ShowWindow = 0
+  $cmdLine = "powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$toastPath`" -JobFile `"$tmp`""
+  $wmiRes = ([wmiclass]'Win32_Process').Create($cmdLine, $PSScriptRoot, $startup)
+  if ($wmiRes -and $wmiRes.ReturnValue -eq 0) { $launched = $true }
+} catch {}
+
+if (-not $launched) {
+  Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
+    '-STA', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+    '-File', $toastPath, '-JobFile', $tmp
+  )
+}
 Done
