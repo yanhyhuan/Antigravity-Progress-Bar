@@ -204,7 +204,9 @@ npm test
 node --test ide/tests/*.test.mjs
 python -m unittest discover -s tests -v
 python manage.py package
+python ide/package.py
 python tools/sync-marketplace.py
+python tools/publish-release.py
 ```
 
 Optional README asset rendering uses headless Edge/Chromium via `node tools/render-readme-assets.mjs`. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [COMPATIBILITY.md](COMPATIBILITY.md), [docs/UPDATES.md](docs/UPDATES.md), and [CHANGELOG.md](CHANGELOG.md).

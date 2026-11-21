@@ -134,8 +134,13 @@ def publish(client, tag, commit, notes, assets):
 
 
 if __name__ == '__main__':
+    import subprocess
     root = Path(__file__).resolve().parents[1]
-    tag = os.environ['GITHUB_REF_NAME']
+    version = json.loads((root / 'plugin.json').read_text(encoding='utf-8'))['version']
+    tag = os.environ.get('GITHUB_REF_NAME') or f'v{version}'
+    repo = os.environ.get('GITHUB_REPOSITORY') or 'yanhyhuan/Antigravity-Progress-Bar'
+    sha = os.environ.get('GITHUB_SHA') or subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+    token = os.environ.get('GH_TOKEN') or subprocess.check_output(['gh', 'auth', 'token'], text=True).strip()
     assets = checked_assets(root, tag)
-    client = GitHub(os.environ['GITHUB_REPOSITORY'], os.environ['GH_TOKEN'])
-    print(publish(client, tag, os.environ['GITHUB_SHA'], (root / 'GITHUB_RELEASE.md').read_text(encoding='utf-8'), assets))
+    client = GitHub(repo, token)
+    print(publish(client, tag, sha, (root / 'GITHUB_RELEASE.md').read_text(encoding='utf-8'), assets))
