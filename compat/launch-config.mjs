@@ -173,16 +173,27 @@ export function hasDebugFlags(argsText) {
   };
 }
 
+const PROXY_LAUNCHER_TARGETS = new Set(['antigravityproxy.exe', 'antigravitylauncher.exe']);
+const PROXY_DESKTOP_SHORTCUT_NAMES = new Set([
+  'antigravity.lnk',
+  'antigravity (proxy).lnk',
+  'antigravity (代理).lnk',
+  'antigravity (прокси).lnk',
+]);
+
 export function isAntigravityDesktopShortcut(shortcutPath, info) {
   if (!info || !info.target) return false;
   const tokens = tokenizeArgs(info.args || '').map(t => stripQuotes(t).toLowerCase());
   if (tokens.some(t => t === '--ide' || t.startsWith('--ide='))) return false;
   const targetName = win32.basename(info.target).toLowerCase();
   if (targetName === 'antigravity.exe') return true;
-  if (targetName === 'antigravityproxy.exe') {
+  if (PROXY_LAUNCHER_TARGETS.has(targetName)) {
     const lnkName = win32.basename(shortcutPath).toLowerCase();
-    const iconName = info.icon ? win32.basename(info.icon).toLowerCase() : '';
-    return lnkName === 'antigravity.lnk' || iconName === 'antigravity.exe';
+    const rawIcon = info.icon ? String(info.icon).replace(/,-?\d+\s*$/, '') : '';
+    const iconName = rawIcon ? win32.basename(rawIcon).toLowerCase() : '';
+    if (iconName === 'antigravity.exe') return true;
+    if (iconName === 'antigravity ide.exe') return false;
+    return PROXY_DESKTOP_SHORTCUT_NAMES.has(lnkName);
   }
   return false;
 }

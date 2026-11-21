@@ -1,6 +1,6 @@
 {
   "name": "antigravity-progress-bar",
-  "version": "0.9.7",
+  "version": "0.9.11",
   "private": true,
   "description": "Antigravity Progress Bar — Compact token throughput, quota forecast, 24h hourly usage and CNY/USD cost dashboard",
   "license": "MIT",

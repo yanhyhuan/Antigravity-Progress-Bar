@@ -1,106 +1,77 @@
 <div align="center">
 
-<img src="docs/assets/hero.png?v=0.9.1" width="100%" alt="Antigrative Dashboard v0.9.1: pixel-cat speed, cache and context controls beside the input.">
+<img src="docs/assets/hero.png?v=0.9.1" width="100%" alt="Antigravity Progress Bar: live throughput, cache hit rate, and context usage beside the model selector.">
 
 # Antigravity Progress Bar
 
-Token throughput, cache hits and context usage in the model selector row — merged with **24h hourly activity**, **CNY / USD cost estimation**, **component filters** and **interactive bar drill-down** on top of upstream `v0.9.7`.<br>
-Keep the summary visible. Hover for the details.
+Compact inline token throughput, cache hit rate, context window, and quota forecasts right beside the Antigravity model selector — enhanced with **CNY / USD cost analytics**, **24h hourly activity**, **3D Nailoong companion**, and **Windows task completion notifications**.
 
-[![Version 0.9.7](https://img.shields.io/badge/version-0.9.7-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
+[![Version 0.9.11](https://img.shields.io/badge/version-0.9.11-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
 [![Platforms](https://img.shields.io/badge/host-Windows%20%7C%20Linux%20%7C%20macOS-83d8b9?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
-[![Antigravity 2.33.0](https://img.shields.io/badge/Antigravity-2.33.0-c5a0ff?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
-[![MIT](https://img.shields.io/badge/license-MIT-d4d9e6?style=flat-square&labelColor=252936)](LICENSE)
+[![Antigravity 2.34.0](https://img.shields.io/badge/Antigravity-2.34.0-c5a0ff?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-d4d9e6?style=flat-square&labelColor=252936)](LICENSE)
 
-[Preview](#preview) · [IDE](#antigravity-ide) · [CLI](#antigravity-cli-status-line) · [Install](#install) · [Enable or remove](#plug-and-unplug) · [Compatibility](#compatibility) · [FAQ](#faq) · [中文](README.zh-CN.md)
+[Preview](#preview) · [Features](#features) · [Install](#install) · [Manage & Update](#manage-and-update) · [Task Notifications](#windows-task-notifications) · [IDE & CLI](#standalone-ide-and-cli) · [Metrics & Privacy](#metrics-and-privacy) · [FAQ](#faq)
 
 </div>
 
-**v0.9.7 (Neon Easter Egg):** Adds the interactive **Neon (氖龙) plush mascot Easter egg** — switching to a Neon model pops up a self-contained plush companion on the top-right edge of the composer with a frosted `✦ 氖龙` hover bubble, press-and-rub squish & spring wobble, click-to-tuck peeking toggle, proximity head-tilt, and rhythmic typing nods (retaining all v0.9.6 macOS launcher and v0.9.5 memory/backfill improvements). [Release notes](https://github.com/ATtacK030130/antigrative-dashboard/releases/tag/v0.9.7) · [Compatibility](COMPATIBILITY.md).
+---
 
 ## Preview
 
-<img src="docs/assets/responsive.png?v=0.9.1" width="100%" alt="Current three-icon layout in a narrow main chat and separate statistics beside a subagent input.">
+<img src="docs/assets/responsive.png?v=0.9.1" width="100%" alt="Adaptive three-icon layout in narrow panes and independent subagent strip.">
 
 <table>
-<tr><th width="50%">Speed and cache</th><th width="50%">Context and shared quotas</th></tr>
+<tr><th width="50%">Speed &amp; Token Cache</th><th width="50%">Context Window &amp; Quota Forecast</th></tr>
 <tr>
-<td width="50%" valign="top"><img src="docs/assets/speed.png?v=0.9.1" width="100%" alt="Current generation speed detail card"><br><img src="docs/assets/widget.png?v=0.9.1" width="100%" alt="Current token usage and cache detail card"></td>
-<td width="50%" valign="top"><img src="docs/assets/context.png?v=0.9.1" width="100%" alt="Current context, five-hour and weekly quota details, with pace forecast and language control"></td>
+<td width="50%" valign="top"><img src="docs/assets/speed.png?v=0.9.1" width="100%" alt="Generation speed detail card"><br><img src="docs/assets/widget.png?v=0.9.1" width="100%" alt="Token usage and cache detail card"></td>
+<td width="50%" valign="top"><img src="docs/assets/context.png?v=0.9.1" width="100%" alt="Context occupancy, 5h and weekly quota forecasts, and UI language switcher"></td>
 </tr>
 </table>
 
 <table>
-<tr><th width="50%">Daily and weekly activity</th><th width="50%">Usage by model</th></tr>
+<tr><th width="50%">Daily, Weekly &amp; 24h Activity</th><th width="50%">Model Breakdown &amp; Cost Sorting</th></tr>
 <tr>
-<td width="50%"><img src="docs/assets/usage-overview.png?v=0.9.1" width="100%" alt="Current Token usage activity with daily and weekly contribution grids"></td>
-<td width="50%"><img src="docs/assets/usage-details.png?v=0.9.1" width="100%" alt="Current model usage chart with day, week and month controls and theme-adapted colors"></td>
+<td width="50%"><img src="docs/assets/usage-overview.png?v=0.9.1" width="100%" alt="Token usage overview with contribution heatmaps and scope toggle"></td>
+<td width="50%"><img src="docs/assets/usage-details.png?v=0.9.1" width="100%" alt="Model usage breakdown with day, week, and month controls"></td>
 </tr>
 </table>
 
-<sub>Desktop widget screenshots with illustrative host layouts and data; these are not IDE screenshots. Main and subagent samples use separate statistics; quotas are account-wide. The 44% context sample uses the latest request-start estimate, not cumulative input. Language choices are at the bottom of context details.</sub>
+---
 
-**Keep working. The numbers are already there.**
+## Features
 
-| See the speed | Know your quota | Stay focused |
-| --- | --- | --- |
-| Weighted session TPS, last-request TPS, model and tool time, and time to first token. | Separate Gemini and Claude/GPT quota groups, with five-hour and weekly reset countdowns. | One compact strip beside the model selector. Hover for details; unused TPS stays hidden in new chats. |
+- **Inline Status Strip & Smooth Speed Card** — Displays weighted session TPS, last-request TPS, peak speed, average TTFT, and model/tool durations without leaving the chat input. Switch between **Pixel Cat** and **Minimal** card styles, both rendered with a smooth monotone-spline waveform that follows your active light/dark theme and host font.
+- **Context Window & Smart Quota Forecasts** — Tracks host-reported context occupancy (`75%` warning / `90%` critical ring colors) alongside a recorded compaction badge (`🗜 N×`). Automatically matches **Gemini**, **Gemini (Argon)**, and **Claude / GPT** quota buckets (including custom `Orchestrator` planners and `(XHigh)` / `(Max)` effort variants in Antigravity `2.34.0`), showing 5-hour and weekly reset countdowns, linear depletion forecasts, and observed window token volumes.
+- **CNY (`¥`) / USD (`$`) Cost & 24h Usage Dashboard** — Aggregates local `usage-v1` history across **All local** traffic or the **Current account**. Includes **Daily**, **Weekly**, and **24-hour Hourly** activity views (retaining 120 days of hourly buckets), automatic 24h-cached exchange-rate and OpenRouter model pricing sync with built-in offline fallbacks, column sorting, interactive component toggles (`Uncached` / `Cache read` / `Output`), `Alt+Click` model isolation, `<0.1%` trace folding, and bar click drill-down.
+- **3D Nailoong Interactive Companion** — Built-in 3D video-atlas mascot perched on the composer rim across all models, featuring hover speech hints, click interactions, drag-down rim-cling, double-click backflips, coding-glasses + laptop animations while tasks are running, and right-click controls. Automatically steps aside on narrow panes, subagent boxes, or open modals.
+- **Windows Long-Task Completion Alerts** — Bundled `Stop` hook sends a native Windows toast notification and plays a sound/voice alert when long-running turns finish (default `≥ 30s`) or stop on error, ignoring quick Q&A turns and manual cancellations.
+- **Subagent Aggregation & Oversized Sessions** — Sums token and cache usage across delegated subagents while keeping speed and context scoped to the active composer. Oversized trajectories stream through a bounded background SQLite worker without blocking live refreshes.
+- **Built-in UI Languages** — Switch dashboard labels anytime between **English**, **简体中文**, and **繁體中文** at the bottom of the Context card or in the Usage Dashboard header.
 
-### Small details that matter
-
-- **Token usage, DSH-style.** Compact total tokens and cache hit rate; hover for uncached input, cache reads, output, and optional cache writes.
-- **Context and quotas together.** A Codex-style usage percentage; hover for used/remaining fractions, tokens versus capacity, and both quota windows with reset times. Uses the host estimate for the latest request, never cumulative input tokens.
-- **English or Chinese.** English by default, with one-click switching and a saved preference.
-- **Language survives restarts.** The inline widget and side panel share an atomic user preference file (`AntigravityPulse/preferences.json`), independent of the host's changing local port.
-- **Hover delay and instant transition.** First hover waits 250ms to prevent accidental popups; clicks and keyboard focus open immediately. Moving between metrics stays instant while a card is open or for 350ms after leaving the controls. Leaving early or replacing the conversation/composer cancels a pending popup.
-- **Stable menus.** Quota-group menus stay open across polling cycles while countdowns continue ticking.
-- **Actual account data.** Remaining quota comes from the account API, not an estimate based on text length. Expired windows do not automatically become 100%.
-- **Conversation-aware.** Switch chats without carrying the previous chat's throughput into a new one.
-- **Subagent-aware.** Token/cache totals include the selected agent and its reachable descendants, with separate current-agent/subagent contributions. Speed and context describe the selected agent, while quotas remain account-wide. Background collection, request deduplication and saved totals keep nested tasks responsive. [Accounting and limits](docs/USAGE.md#delegated-tasks-boost--teamwork--subagents).
-- **Teamwork compatibility (v0.8.1).** Keep the strip through send/stop/cancel transitions and support deeply nested static agent badges. Conversation IDs come from the current input's DOM owner when available, including switches without a URL change. Hidden/inert or deeper editors are ignored; ambiguous visible inputs/badges are not guessed. Six-level English/Chinese browser fixtures pass, including usage remount and context-to-usage language synchronization. Windows real three-level delegation was checked with independent metrics, return navigation and a generating-state screenshot; this host changed its URL at each level and rendered one composer. Same-URL/six-level DOM cases remain fixture coverage; signed-in Linux/macOS GUI checks are still pending.
-- **Survives updates.** Plugin-owned runtime attachment reconnects after app updates, without modifying the application archive.
-- **Persistent conversations.** TPS and cache statistics are saved separately for each conversation and account; reloads can recover saved statistics.
-- **Compact-window support.** Full statistics reduce to three clickable icons (speed, cache and context) when space is limited. Hover or click for details; language switching stays available in the context card. The strip hides only if the icons cannot fit safely and restores when space returns. Message controls hidden behind the composer do not cause scroll flicker.
-- **Discoverable language settings.** English is the default. A compact bilingual first-use tip beside context opens the English / 简体中文 / 繁體中文 choices at the bottom of its detail card. The panel and usage window offer the same three choices through their language menu. Preferences survive restarts. Choosing a language or closing the tip saves completion, so it does not return on restart. Closing the tip does not change the language; failed saves offer a retry. Subagent composers do not repeat the tip. Language changes do not change the UTC+8 usage accounting boundaries.
-- **Theme adaptation.** Controls, cards and quota menus follow Antigravity's light/dark mode and custom background, card, text and accent colors, with readable text and OS fallback in standalone previews. Live changes require no restart or conversation reload.
-- **Local collection.** The collector talks to loopback endpoints. It does not upload your metrics to a third-party service.
-- **Windows task completion notifications.** Bundled `Stop` hook triggers a native Windows toast and sound/voice alert when long-running turns finish (default ≥30s) or stop on error, ignoring short Q&A and manual cancellations; user overrides in `notify-settings.json` are preserved across reinstalls and in-app updates.
-
-## Antigravity IDE
-
-**v0.7.0** adds a separate VSIX for Google's own standalone IDE. Download
-`antigrative-dashboard-ide-0.9.7.vsix` from the release and choose **Install from VSIX…**
-in the IDE's Extensions view. No desktop App installation is required.
-
-Fully quit the IDE, then start it with
-`--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`.
-Add these flags to your IDE shortcut for subsequent launches. Narrow panes show
-three icons; wider panes show values. Hover/click opens the same metric details.
-
-Windows IDE **2.5.5** has been tested with real conversations; IDE **2.6.0** has been checked with a real conversation after this fix. Linux/macOS IDE
-have automated coverage; signed-in GUI acceptance is still outstanding.
-VS Code, Visual Studio, JetBrains, Zed and Xcode integrations are not implemented.
-See [IDE installation, update, diagnostics and data cleanup](ide/README.md).
-
-## Antigravity CLI status line
-
-Available in **v0.6.0**: an independent adapter for the official Antigravity CLI `statusLine` interface displays context occupancy, cache read tokens, state and grouped quotas, with English/Chinese and terminal-width adaptation. Remaining quota numbers and bars are **green ≥70%, yellow ≥30% and <70%, red <30%**. Preview: `node cli/statusline.mjs --preview`; install: `python manage.py install-cli` (Linux/macOS: `python3`). Requires Node.js 20+ and a CLI supporting the interface. Version 0.8.4 prioritizes current-request cache percentage for tested CLI 1.3.2/1.3.3 Sonnet 4.6 and GPT-OSS 120B counters, plus Gemini 3.8 Flash (High) on CLI 1.3.3, with zero cache writes; unknown cases stay unavailable. CLI tok/s needs streaming-duration data absent from the documented payload. See [CLI usage and rollback](docs/CLI.md).
-
-![Real Antigravity CLI conversation with current-request cache percentage](docs/assets/cli-conversation.png?v=0.8.4-cli-1)
-
-<sub>Real Linux Antigravity CLI 1.3.3 session after two English replies: current-request cache share 95.7%, 13.1K cached-read tokens; account email masked. macOS signed-in interactive acceptance remains outstanding.</sub>
+---
 
 ## Install
 
-### Option 1: One-line PowerShell Auto-Install (Windows Recommended)
+Supported on **Windows, Linux, and macOS** with **Antigravity Desktop 2.21.1 – 2.34.0** and **Python 3.10+**. Zero third-party `pip` or `npm` dependencies are required; the collector runs on Antigravity's bundled Node.js runtime.
 
-Run in PowerShell to download the latest GitHub Release, verify SHA-256, and configure the desktop launch shortcut automatically (appears under **Customizations → Installed**):
+### Option 1: Antigravity Custom Plugin Marketplace
+
+Add the following catalog URL in **Antigravity → Customizations → Plugins**:
+
+```text
+https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/marketplace.json
+```
+
+### Option 2: One-Line PowerShell Install (Windows)
+
+Downloads the latest release, verifies its SHA-256 checksum, installs the plugin, and configures your Antigravity desktop shortcuts automatically:
 
 ```powershell
 irm https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/install.ps1 | iex
 ```
 
-### Option 2: Let Antigravity Agent Install Automatically
+### Option 3: Ask Antigravity Agent
 
 Paste into an Antigravity chat:
 
@@ -108,203 +79,138 @@ Paste into an Antigravity chat:
 Please install and enable https://github.com/yanhyhuan/Antigravity-Progress-Bar
 ```
 
-### Option 3: Manual Clone
-
-The commands below install the **desktop App adapter**. IDE users should use the [separate VSIX instructions above](#antigravity-ide).
-
-Supported: **Windows, Linux and macOS; Antigravity desktop App 2.21.1 – 2.33.0; Python 3.10+**. The same release ZIP works on all three systems. No third-party pip or npm packages are needed to install or run the plugin. The sidecar uses the app's bundled Node.js runtime. See [COMPATIBILITY.md](COMPATIBILITY.md) for the per-platform verification scope.
-
-> The inline model-row position has no public plugin mounting API. A standard Antigravity sidecar attaches the widget through the host's local loopback renderer debugging endpoint. Starting with **Antigravity Desktop 2.33.0**, `--remote-debugging-port` is opt-in: `manage.py install` and the active sidecar automatically configure user-owned Windows shortcuts, Linux `.desktop` entries, and a lightweight macOS wrapper app at `~/Applications/Antigravity (Dashboard).app` (preserving the signed `Antigravity.app` bundle untouched, ready for Spotlight or Dock) with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1` without modifying `resources/app.asar`. You can also run `python[3] manage.py launch` (add `--restart` on macOS if Antigravity is still running without the debug flag). The native side panel remains available regardless.
-
-Download the ZIP from the [latest release](https://github.com/ATtacK030130/antigrative-dashboard/releases/latest), extract it to a permanent folder, or clone the repository:
+### Option 4: Clone & Install Manually
 
 ```powershell
-git clone https://github.com/ATtacK030130/antigrative-dashboard.git
-cd antigrative-dashboard
+git clone https://github.com/yanhyhuan/Antigravity-Progress-Bar.git
+cd Antigravity-Progress-Bar
 python manage.py install
 ```
 
-On Linux / macOS, use `python3 manage.py install` or `sh install.sh` (and `python3` for the lifecycle commands below). Never run the installer with sudo.
+On Linux or macOS, run `python3 manage.py install` (or `sh install.sh`). Never run the installer with `sudo`.
 
-**Moving an existing installation:** If the previous repository is unavailable, older App releases (`<= v0.8.20`) cannot find this update themselves. Download the new release ZIP and run `python manage.py install` once (`python3` on Linux/macOS), then fully restart the App; later App checks use this repository. IDE users install the new VSIX separately. For CLI, rerun `python manage.py install-cli` from the new ZIP, including any previously chosen `--language` or `--node` options.
+After installing, **fully quit and reopen Antigravity** from your shortcut or launcher so the new runtime loads.
 
-Fully quit and reopen Antigravity. Open a conversation: the strip appears beside the model selector. PowerShell users can also run `./install.ps1`.
+> **How inline mounting works on Antigravity 2.33.0+ & 2.34.0:**  
+> Antigravity has no public DOM slot beside the model selector, so the sidecar attaches the Shadow DOM strip over the host's loopback CDP port (`127.0.0.1`) and reads local metrics via the official Sidecar SDK loopback environment (`ANTIGRAVITY_LS_ADDRESS` / `ANTIGRAVITY_CSRF_TOKEN`) without modifying `resources/app.asar`. Starting with `2.33.0`, remote debugging is opt-in: `manage.py install` and the active sidecar automatically configure user-owned Windows `.lnk` shortcuts, Linux `.desktop` entries, and a lightweight macOS launcher at `~/Applications/Antigravity (Dashboard).app` with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`.
 
-The installer copies and enables the plugin and restores any exactly verified legacy patch during migration. The runtime discovers the current renderer port and reconnects automatically. **Keep the extracted source folder** for enable, disable, update, and uninstall commands.
+---
 
-<details>
-<summary><strong>Ask an agent to install it</strong></summary>
+## Manage and Update
 
-```text
-Install and enable Antigrative Dashboard on this computer.
-Repository: https://github.com/ATtacK030130/antigrative-dashboard
-1. Read README.md, COMPATIBILITY.md, docs/CLI.md and ide/README.md. Inspect the OS,
-   available executables, host versions and existing dashboard configuration with
-   read-only checks. Distinguish desktop App, Antigravity CLI (agy) and standalone
-   Antigravity IDE. The OS alone does not identify the target.
-2. Before downloading an installation package or changing settings, summarize the
-   detected hosts and ask me to confirm the target: App, CLI or standalone IDE.
-   If several are present, let me choose one or more; if none is identified, ask
-   for its executable path. Do not guess App when I say Linux or terminal.
-3. Fetch the latest stable release metadata and report its plugin version, the
-   host version/path and the selected adapter. The App and CLI share a ZIP, but
-   their installation commands differ. The standalone IDE uses a separate VSIX.
-   Download only assets for the confirmed target and verify SHA256. Keep the
-   extracted source in a permanent directory. Do not install the host itself or
-   upgrade, downgrade or replace it without separate confirmation.
-4. Use Python 3.10+ (python3 on Linux/macOS) and the selected instructions:
-   - App: check python manage.py status, then python manage.py install.
-   - CLI: check agy --version and Node.js 20+, then python manage.py install-cli.
-     Do not run manage.py install. Preserve any existing statusLine using the
-     documented backup/override flow. CLI cache percentage is conditional; check
-     docs/CLI.md for tested models/versions and unavailable values. Do not claim
-     CLI tok/s or local usage charts: they are not available through this adapter.
-   - Standalone IDE: install the release VSIX through Install from VSIX... or
-     ide/manage.py install --exe <verified-IDE-executable> --vsix <release-VSIX>.
-     It does not require the desktop App; do not run the App installer.
-5. Preserve unrelated settings and saved data. If a restart or login is needed,
-   tell me first and do not forcibly interrupt running tasks. For IDE launches,
-   follow its documented loopback debugging flags. For CLI, start a new session.
-6. Verify the selected adapter in its real host, and report plugin/host versions,
-   target, path, checks actually performed, remaining steps and how to disable or
-   uninstall that adapter. Never treat installing a ZIP as proof of CLI success.
+### In-App Updates
+
+Open **Context details → bottom-right `⋯` → Check for updates** inside Antigravity to verify and install new releases from `yanhyhuan/Antigravity-Progress-Bar` while keeping all saved statistics and preferences intact.
+
+### CLI Lifecycle Commands
+
+Run from the repository directory (`python3` on Linux/macOS):
+
+| Action | Command | Description |
+| --- | --- | --- |
+| Install / Update | `python manage.py install` | Install runtime files, configure user launch entry points, and keep saved data |
+| Launch Host | `python manage.py launch` | Launch Antigravity Desktop with loopback debugging flags (`--restart` supported on macOS) |
+| Check Status | `python manage.py status` | Inspect install state, host version (`2.34.0`), launch shortcut config, and attachment health |
+| Disable | `python manage.py disable` | Hide the inline strip on the next poll without uninstalling |
+| Enable | `python manage.py enable` | Re-enable the plugin and restore the strip |
+| Panel Only | `python manage.py install --panel-only` | Run only the native Side Panel extension without inline composer attachment |
+| Uninstall | `python manage.py uninstall` | Remove plugin runtime and managed launch flags while keeping historical data |
+
+To open the fallback **Side Panel** inside Antigravity, toggle the right auxiliary pane and select **`+` → Extensions → Antigravity Progress Bar**.
+
+---
+
+## Windows Task Notifications
+
+On Windows, the bundled `Stop` hook notifies you when a turn finishes after `minSeconds` (default `30s`) or stops due to an error. Customize preferences in `~/.gemini/config/plugins/antigravity-pulse/notify-settings.json` (preserved across updates and reinstalls) — or simply ask the Antigravity agent to adjust them for you:
+
+```json
+{
+  "enabled": true,
+  "minSeconds": 30,
+  "notifyOnError": true,
+  "sound": true,
+  "speak": true,
+  "speakVolume": 1.0
+}
 ```
 
-</details>
+---
 
-## Plug and unplug
+## Standalone IDE and CLI
 
-### Open the App side panel
+### Antigravity Standalone IDE (VSIX)
 
-Open the right auxiliary pane using its top-right toggle, then choose **+ → Extensions → Antigrative Dashboard** in that pane's toolbar. The panel keeps speed, cache, context and quota summaries visible. Click a metric card to select its detail tab; pointer departure does not hide it. Long details scroll inside a stable frame. Arrow/Home/End keys select tabs. The Token usage window opened from the input strip is a separate view.
+Download `antigrative-dashboard-ide-0.9.11.vsix` from [Releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases) and select **Install from VSIX…** in the Antigravity IDE Extensions view. Fully quit the IDE and start it with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`. See [ide/README.md](ide/README.md) for full setup and rollback details.
 
-Fully quit and reopen the App after updating plugin code so its collector loads the new modules. A panel that was already open may still be served by the previous collector until restart.
+### Antigravity CLI (`agy`) Status Line
 
-Run these commands from the project directory:
+Displays context occupancy, cached-read tokens, status, and color-coded quota bars in the official `agy` CLI `statusLine`:
 
-| Action | Command | What happens |
-| --- | --- | --- |
-| Install or update | `python manage.py install` | Copy runtime adapter, configure user launch entry points, and preserve saved data |
-| Launch with inline bar | `python manage.py launch` | Start Antigravity Desktop with loopback `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1` |
-| Disable | `python manage.py disable` | Disable the plugin and hide the strip on its next poll |
-| Enable | `python manage.py enable` | Start the plugin and show the strip again |
-| Inspect | `python manage.py status` | Check installation, enabled state, host debug-port status, and runtime attachment health |
-| Uninstall | `python manage.py uninstall` | Remove this plugin, revert dashboard-managed launch flags, and retain saved statistics |
+```powershell
+node cli/statusline.mjs --preview
+python manage.py install-cli
+```
 
-First installation, plugin code updates, and uninstall require a full app restart. Enable and disable do not require reinstalling or rewriting the archive. `./uninstall.ps1` runs the uninstall command.
+Requires Node.js 20+. See [docs/CLI.md](docs/CLI.md) for options and model coverage.
 
-**Recovery files stay available.** Original archives live in `%LOCALAPPDATA%/AntigravityPulseBackups/<timestamp>/`. Uninstall retains backups and diagnostic logs. If the archive has unknown modifications, the uninstaller refuses to overwrite it.
+![Antigravity CLI status line](docs/assets/cli-conversation.png?v=0.8.4-cli-1)
 
-`python manage.py install --panel-only` disables inline attachment and installs only the sidecar panel. It requires native UI Extensions to be available on the account and does not provide the inline strip.
+---
 
-The stable internal plugin ID remains `antigravity-pulse` for compatibility with earlier installations. The public project name is **Antigrative Dashboard**.
+## Metrics and Privacy
 
-## How the numbers work
-
-| Metric | Definition |
+| Metric | Basis |
 | --- | --- |
-| Context window | Latest request-start `estimatedTokensUsed` / `maxContextTokens`; unknown capacity stays unavailable |
-| Cache hit | Cached-read tokens divided by uncached input + cache reads + cache writes; token-weighted across requests |
-| Token total | Normalized total input plus output tokens, including thinking output |
-| Session TPS | Sum of response tokens from valid requests divided by their total streaming duration |
-| Last-request TPS | Response tokens divided by streaming duration for the latest request; uncertain or missing timing stays unavailable |
-| TTFT | Average time to first token; excluded from response streaming TPS |
-| Model time | TTFT plus streaming duration across requests |
-| Tool time | Union of tool execution intervals; overlapping time counted once |
-| Five-hour / weekly remaining | Account-provided `remainingFraction`; not a currency balance |
-| Reset countdown | Account-provided `resetTime` minus the current time |
+| **Session / Latest TPS** | Response tokens ÷ streaming duration (anomalous buffered spikes and uncertain tool-only windows are filtered; see [docs/TPS.md](docs/TPS.md)) |
+| **TTFT / Model / Tool Time** | Average time to first token; cumulative model time (`TTFT + stream`); merged non-overlapping tool execution intervals |
+| **Cache Hit Rate** | `cacheReadTokens ÷ (uncachedInput + cacheRead + cacheWrite)`, token-weighted across validated requests |
+| **Context Window** | Latest request-start `estimatedTokensUsed / maxContextTokens` reported by the host ([docs/CONTEXT_LIMITS.md](docs/CONTEXT_LIMITS.md)) |
+| **5h / Weekly Quotas** | Live account `remainingFraction` and `resetTime`, paired with linear pace projections and local window token observations |
+| **Estimated Cost** | Local token counts × OpenRouter model pricing (`prompt`, `completion`, `cacheRead`, `cacheWrite`), converted to CNY (`¥`) in Chinese locales or USD (`$`) in English |
 
-Request metrics update after requests finish, with a poll about every 2.2 seconds. This is not a per-token instantaneous speed meter. Quotas refresh every 60 seconds; countdowns tick every second.
-Antigravity normalizes `inputTokens` to uncached input even for Gemini; these are not upstream prompt-token counters. Cache writes are not hits. Compact cards show readable counters and use a dash for unavailable values. Calculation notes, request-coverage counts and inequality prefixes are kept out of the card. Internally, partial/unknown coverage remains tracked: readable sums may omit missing usage and are not a complete account bill; cache hit rate includes only validated input samples, and zero input has no ratio denominator.
-Thinking tokens are separate. If a model does not expose response tokens, the detail card explains the all-output fallback. Requests without valid timing do not contribute to TPS. Missing or disconnected data is labeled accordingly.
+**Local-only storage:** All RPC calls stay strictly on `127.0.0.1` loopback. Per-conversation snapshots (`history-v1`) and aggregated daily/hourly ledgers (`usage-v1`) live under `~/.gemini/antigravity/sidecar_data/antigravity-pulse/panel/data/` and store only timestamps, model names, hashed scopes, and numeric token counters — **never** prompts, replies, conversation titles, emails, or credentials. Pricing sync fetches only public model rates from `openrouter.ai` and `open.er-api.com` once every 24 hours without sending any user or usage data, falling back cleanly offline. See [docs/USAGE.md](docs/USAGE.md), [docs/LONG_CONVERSATIONS.md](docs/LONG_CONVERSATIONS.md), and [docs/ROBUSTNESS.md](docs/ROBUSTNESS.md).
 
-### Timing quality
-
-Very high TPS can occur when output arrives in a batch and the recorded stream lasts only milliseconds. A short receipt window may not represent actual model generation time. The plugin checks timing quality before adding a request to session TPS; it never caps speed or invents a longer duration.
-
-- **Excluded from TPS:** invalid token scopes, conflicting duplicate request records, multiple differing attempt usages without matching timing, and nonfinite rates. A tool-only stream is also treated as uncertain when it lasts under 1 second, follows at least 2 seconds of TTFT, and TTFT is at least 20 times its stream duration.
-- **Same-model check:** with at least five otherwise eligible samples lasting 1 second or more, a short sample above `max(8 × median, median + 12 × MAD)` is excluded. The baseline uses the same model, provider and token basis; MAD is the median absolute deviation.
-- **Retained samples:** ordinary short text and sustained high speeds remain eligible. A high number alone is not enough to reject a sustained sample. Uncertain requests still contribute their reported token and cache usage; excluding their rate does not delete the request.
-- **Display and saved data:** an uncertain latest request shows **Timing uncertain**, without substituting the preceding request's speed. If no samples qualify, TPS is unavailable. Old saved rates await recalculation from the complete local trajectory; token/cache/context data is retained. Reloading does not restore the old unvalidated TPS.
-
-These are conservative checks on host timing summaries, not proof of buffering. The current local API does not expose a chunk timeline, so missing server generation time cannot be reconstructed. The interface keeps the calculation basis concise; filtering rules are documented here. Desktop and standalone IDE share these rules. See [timing policy and limitations](docs/TPS.md), informed by DSH discussions [#7960](https://github.com/deepseek-ai/deepseek-harness/discussions/7960) and [#6129](https://github.com/deepseek-ai/deepseek-harness/discussions/6129).
-
-## Saved conversation statistics
-
-Context occupancy uses the current request's host-reported window. The compact context card shows occupancy, used/total tokens, sampled model and both quota windows with reset times. Duplicate capacity references, unknown compaction fields, diagnostic text estimates and calculation paragraphs stay out of the card. The collector still keeps separate sourced references and conservative optional transcript diagnostics; neither changes the host denominator or billed usage. See [context limits and sources](docs/CONTEXT_LIMITS.md).
-
-Completed-request TPS, cache counts and whitelisted context estimates are saved automatically in `~/.gemini/antigravity/sidecar_data/antigravity-pulse/panel/data/history-v1/<account-hash>/<conversation-id>.json`. Reloading, restarting, updating or reinstalling the plugin preserves them. Empty or regressing backend data cannot erase a useful saved sample. Saved fallbacks show their saved time in the details. A real 0% cache hit remains 0%.
-
-Records contain whitelisted statistics and model/status only; no prompts, titles, emails or credentials. The current account must be authenticated before its saved files are loaded. Already missing timing cannot be reconstructed. To backfill all conversations still available from the local API and check restart restoration, run `node tools/check-live-history.mjs` with Antigravity open.
-
-## Long conversations
-
-Statistics use separate step and generator-metadata offset reads, with messages disabled for generator requests. Large text/tool payloads are streamed and discarded; updates re-read mutable tails instead of the entire conversation. The former 512 MiB response cap is removed, while projected statistics retain a measured engineering memory budget. See [collection policy, experiments and limits](docs/LONG_CONVERSATIONS.md).
-
-## Local Token usage
-
-Open the cache/database icon, then **View token usage**. Today and this month share a compact two-column entry. Activity shows daily/weekly contribution grids; Usage details shows model stacks by day, week or month. Chart colors follow your actual theme and accent; K/M/B summaries use at most one decimal, while tables/tooltips retain full counts.
-
-The first-use introduction explains history import, coverage and privacy. **Got it** saves completion across restarts, language changes and theme changes. Closing the window without acknowledgment keeps the tip for next time; a failed save can be retried.
-
-Opening **View token usage** or clicking its top-right **Refresh usage** button requests historical synchronization. Ordinary polling, card refreshes and quota resets do not start a history scan. Each import consumes a stable, bounded queue in short slices; new top-level conversations wait for the next requested pass, and unreadable or over-budget records leave coverage partial. New completed requests from the current conversation are still recorded during normal polling. The local `usage-v1` ledger deduplicates requests per account and keeps only time, model, Token counters and hashed identifiers; no prompts, replies or credentials. Desktop and IDE have separate ledgers. Deleting a chat does not subtract usage already recorded. This is observed local usage, not a provider bill; missing/deleted historical data may leave gaps. Days/months use UTC+8 and weeks start Monday.
-
-Desktop: `~/.gemini/antigravity/sidecar_data/antigravity-pulse/panel/data/usage-v1/` (the host may override the data directory). IDE: `User/globalStorage/you-should-know-me.antigrative-dashboard-ide/usage-v1/` under its profile. Stop the plugin before deleting its ledger; available conversations can be imported again by opening the usage window after restart. `history-v1` remains the separate latest-per-conversation statistics store. [Accounting, cleanup and limitations](docs/USAGE.md).
-
-## Compatibility
-
-Desktop verified on **Windows 11 / Antigravity App 2.33.0** (and earlier 2.21.1 – 2.32.2 releases), including real context readings, quota pace forecasts, pixel-cat speed cards and the combined hover card. A separate VSIX supports standalone Antigravity IDE 2.5.5 and 2.6.0 on Windows. Other editor extensions and DSH are unsupported. Linux/macOS have automated checks; full signed-in desktop/IDE GUI verification is still open. See COMPATIBILITY.md.
-Repository presentation is inspired by [DSH Rail Music](https://github.com/YOU-SHOULD-KNOW-ME/dsh-rail-music); installation APIs differ. `dsh plugin add` cannot install this project.
-
-[Full compatibility and recovery details →](COMPATIBILITY.md)
-
-### Language
-
-Open context details and choose **English / 简体中文 / 繁體中文** at the bottom. The first-use bilingual tip points to this setting. The desktop adapter saves an atomic user preference shared with its side panel; the IDE saves its own preference in extension global storage. Both survive restarts. This changes dashboard labels, not the host app or model name.
+---
 
 ## FAQ
 
-<details><summary><strong>The strip did not appear after installation.</strong></summary>
+<details><summary><strong>The inline strip did not appear after installing or updating Antigravity.</strong></summary>
 
-Fully quit the main app process and reopen it. Run `python manage.py status`. Inspect `~/.gemini/antigravity/sidecar_data/antigravity-pulse/panel/logs/sidecar.log` and `data/integration-state.json`. Review raw host logs for local information before publishing them.
-
-</details>
-
-<details><summary><strong>Why is TPS missing in a new conversation?</strong></summary>
-
-There are no request metrics yet. TPS is hidden instead of showing the previous chat's speed. It appears after a model response finishes.
+1. Make sure you **fully quit** Antigravity (check the system tray) and reopen it from your configured shortcut or run `python manage.py launch`.
+2. Run `python manage.py status` to verify `"hostVersion"`, `"configured": true`, and `"inlineIntegration"`.
+3. Check `~/.gemini/antigravity/sidecar_data/antigravity-pulse/panel/logs/sidecar.log` if needed.
 
 </details>
 
-<details><summary><strong>Why do Gemini and Claude/GPT have different quotas?</strong></summary>
+<details><summary><strong>Why is TPS blank (`—`) in a brand-new chat?</strong></summary>
 
-The service returns independent groups. The default follows the selected model. Inspect another group from a quota card; an explicit label prevents confusion after manually selecting a different group.
-
-</details>
-
-<details><summary><strong>What happens after an Antigravity update?</strong></summary>
-
-App updates cannot overwrite the runtime adapter in the user plugin directory. It rediscovers ports, credentials and the renderer automatically. If the inline strip is missing, inspect `python manage.py status`; use the native panel while a changed host interface is adapted. Never copy an old app archive over a newer installation. See [robustness analysis](docs/ROBUSTNESS.md).
+No model response has completed in that conversation yet. Rather than carrying over stale TPS from an earlier chat, the strip waits until the first response finishes.
 
 </details>
 
-## Development and releases
+<details><summary><strong>How do compact windows behave?</strong></summary>
+
+When composer width tightens, full text counters smoothly collapse into three clickable icons (Speed, Cache, Context) and hide completely only if even the icons would collide with host controls, restoring automatically when widened.
+
+</details>
+
+---
+
+## Development
 
 ```powershell
 npm test
+node --test ide/tests/*.test.mjs
 python -m unittest discover -s tests -v
 python manage.py package
+python tools/sync-marketplace.py
 ```
 
-ZIP and SHA256 files are generated in `dist/`. Packaging uses an allowlist and excludes credentials, account settings, logs, SDK caches, and application archives.
-Generating README images is an optional developer task: `node tools/build-readme-assets.mjs` uses Edge/Chrome headless CDP (or Playwright when `PLAYWRIGHT_MODULE` is set), renders the actual widget code with illustrative metrics and produces English/Chinese assets. This is not an installation dependency.
+Optional README asset rendering uses headless Edge/Chromium via `node tools/render-readme-assets.mjs`. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [COMPATIBILITY.md](COMPATIBILITY.md), [docs/UPDATES.md](docs/UPDATES.md), and [CHANGELOG.md](CHANGELOG.md).
 
-[Development guide →](docs/DEVELOPMENT.md) · [Changelog →](CHANGELOG.md)
+---
 
-## License
+## Credits & License
 
-Source is available under [MIT](LICENSE). Antigravity binaries, SDK resources, and application backups are not distributed. Product names belong to their respective owners; this project is not affiliated with or endorsed by Antigravity.
-
-## Manual App updates
-
-Open **context details → bottom-right ⋯ → Check for updates**. The App-only updater checks stable official Releases after a click, verifies the archive and checksum, preserves settings/usage, and offers plugin reload after installation. Installation failures retain rollback/recovery material. IDE/CLI packages are installed separately. See [verification, recovery and limitations](docs/UPDATES.md).
+Enhanced and maintained by [@yanhyhuan](https://github.com/yanhyhuan), building upon [ATtacK030130/antigrative-dashboard](https://github.com/ATtacK030130/antigrative-dashboard). Released under the [MIT License](LICENSE). Not affiliated with or endorsed by Google or Antigravity.

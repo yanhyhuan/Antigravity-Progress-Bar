@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {quotaModelFamily,classifyQuotaGroupId} from '../usage.mjs';
 const create=createRequire(import.meta.url)('../../../compat/i18n.cjs');
 
 test('all locales have matching translation keys and interpolation parameters',()=>{
@@ -70,4 +71,43 @@ test('Traditional Chinese (zh-TW) provides accurate localized terminology and to
   assert.equal(language.errorMessage('Antigravity 接口 GetUserStatus 返回 401'),'Antigravity API GetUserStatus 回傳 HTTP 401');
   const saved=language.toggle();assert.equal(saved,'en');
   assert.equal(language.toggle(),'zh-TW');
+});
+
+test('errorMessage never leaks raw subprocess commands in any locale and translates IDE/Desktop process errors',()=>{
+  const rawLeak='Command failed: powershell.exe -NoLogo -NoProfile Get-CimInstance Win32_Process';
+  const zh=create('zh-CN'),tw=create('zh-TW'),en=create('en');
+  assert.equal(zh.errorMessage(rawLeak),'统计面板暂时无法连接');
+  assert.equal(tw.errorMessage(rawLeak),'統計面板暫時無法連線');
+  assert.equal(en.errorMessage(rawLeak),'Statistics are temporarily unavailable.');
+
+  assert.equal(zh.errorMessage('读取 Antigravity 进程信息超时'),'读取 Antigravity 进程信息超时');
+  assert.equal(tw.errorMessage('读取 Antigravity 进程信息超时'),'讀取 Antigravity 處理程序資訊逾時');
+  assert.equal(en.errorMessage('读取 Antigravity 进程信息超时'),'Timed out reading Antigravity process information.');
+
+  assert.equal(zh.errorMessage('Timed out reading Antigravity IDE processes'),'读取 Antigravity IDE 进程信息超时');
+  assert.equal(tw.errorMessage('Timed out reading Antigravity IDE processes'),'讀取 Antigravity IDE 處理程序資訊逾時');
+  assert.equal(en.errorMessage('Timed out reading Antigravity IDE processes'),'Timed out reading Antigravity IDE processes.');
+});
+
+test('Antigravity 2.34.0 Orchestrator custom planner labels route to matching Gemini / Argon / 3P quota buckets',()=>{
+  const language=create('zh-CN');
+  const groups=[
+    {id:'gemini',name:'Gemini'},
+    {id:'gemini-argon',name:'Gemini (Argon)'},
+    {id:'3p',name:'Claude / GPT'},
+  ];
+  assert.equal(language.quotaGroupKind({name:'Orchestrator'}),'gemini');
+  assert.equal(language.quotaGroupKind({name:'Select model, current: Orchestrator Gemini 4 Neon (XHigh)'}),'gemini');
+  assert.equal(language.quotaGroupKind({name:'Select model, current: Orchestrator Gemini 4 Argon'}),'gemini-argon');
+  assert.equal(language.quotaGroupKind({name:'Select model, current: Orchestrator Claude Opus 5.5 (Max)'}),'3p');
+  assert.equal(language.quotaGroupKind({name:'Orchestrator GPT-OSS 120B'}),'3p');
+
+  assert.equal(language.chooseQuotaGroup(groups,['Select model, current: Orchestrator Claude Opus 5.5 (Max)'],null)?.id,'3p');
+  assert.equal(language.chooseQuotaGroup(groups,['Select model, current: Orchestrator Gemini 4 Carbon'],null)?.id,'gemini');
+  assert.equal(language.chooseQuotaGroup(groups,['Orchestrator'],null)?.id,'gemini');
+
+  assert.equal(quotaModelFamily('Orchestrator Claude Opus 5.5 (Max)'),'3p');
+  assert.equal(quotaModelFamily('Orchestrator Gemini 4 Neon (XHigh)'),'gemini');
+  assert.equal(quotaModelFamily('Orchestrator'),'gemini');
+  assert.equal(classifyQuotaGroupId(groups,'Orchestrator Claude Sonnet 4.6'),'3p');
 });

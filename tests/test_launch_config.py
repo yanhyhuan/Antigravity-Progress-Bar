@@ -103,9 +103,16 @@ class LaunchConfigTests(unittest.TestCase):
             proxy_info = {'target': r'C:\Tools\AntigravityProxy.exe', 'args': '', 'icon': r'C:\Apps\Antigravity.exe'}
             self.assertTrue(lc.is_antigravity_desktop_shortcut(proxy_lnk, proxy_info))
 
+            launcher_lnk = root / 'Antigravity (Proxy).lnk'
+            launcher_info = {'target': r'C:\Tools\AntigravityLauncher.exe', 'args': '', 'icon': r'C:\Apps\Antigravity.exe,0'}
+            self.assertTrue(lc.is_antigravity_desktop_shortcut(launcher_lnk, launcher_info))
+
             ide_proxy = root / 'Antigravity IDE - Dashboard Preview.lnk'
             ide_info = {'target': r'C:\Tools\AntigravityProxy.exe', 'args': '--ide', 'icon': r'D:\Antigravity IDE\Antigravity IDE.exe'}
             self.assertFalse(lc.is_antigravity_desktop_shortcut(ide_proxy, ide_info))
+            ide_launcher = root / 'Antigravity IDE.lnk'
+            ide_launcher_info = {'target': r'C:\Tools\AntigravityLauncher.exe', 'args': '--ide', 'icon': r'D:\Antigravity IDE\Antigravity IDE.exe,0'}
+            self.assertFalse(lc.is_antigravity_desktop_shortcut(ide_launcher, ide_launcher_info))
             self.assertFalse(lc.is_antigravity_desktop_shortcut(root / 'IDE.lnk', {'target': r'D:\Antigravity IDE\Antigravity IDE.exe', 'args': ''}))
 
             merged, added = lc.merge_debug_arguments('--profile default -- https://example.com')

@@ -26,7 +26,7 @@ BACKUPS = _paths['backups']
 RUNTIME_FILES = ('assets', 'compat', 'sidecars', 'hooks', 'sounds', 'plugin.json', 'hooks.json')
 DIST_FILES = ('plugin.json', 'hooks.json', 'assets', 'sidecars', 'compat', 'hooks', 'sounds', 'cli', 'ide', 'manage.py', 'install.ps1',
               'uninstall.ps1', 'install.sh', 'uninstall.sh', 'README.md', 'LICENSE', 'CHANGELOG.md', 'COMPATIBILITY.md', 'docs', 'package.json',
-              '.gitignore', '.gitattributes', '.github', 'tests', 'tools', 'GITHUB_RELEASE.md', 'README.zh-CN.md')
+              '.gitignore', '.gitattributes', '.github', 'tests', 'tools', 'GITHUB_RELEASE.md')
 IGNORED = {'__pycache__', '.data', 'node_modules', '.git', 'dist', 'data', 'history-v1', 'usage-v1', 'sdk'}
 
 def lifecycle_operation(function):
@@ -322,22 +322,37 @@ def status(explicit_app=False):
                       'inlineIntegration': json_read(health_file, None),
                       'toolbarAdapterRecoverable': app_asar.exists() and original_for_current(app_asar.read_bytes()) is not None}, indent=2))
 
+BINARY_SUFFIXES = {'.png', '.mp3', '.webp', '.ico', '.icns', '.woff', '.woff2', '.ttf'}
+
 def package(output=None):
     version = json_read(SOURCE / 'plugin.json')['version']
     output = Path(output) if output else SOURCE / 'dist' / f'antigrative-dashboard-{version}.zip'
     output.parent.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for name in DIST_FILES:
+        path = SOURCE / name
+        if not path.exists():
+            raise RuntimeError(f'Required release file missing: {name}')
+        files = sorted(path.rglob('*')) if path.is_dir() else [path]
+        for file in files:
+            rel = file.relative_to(SOURCE)
+            if not file.is_file() or any(p in IGNORED for p in rel.parts):
+                continue
+            if file.suffix in {'.log', '.pyc'}:
+                continue
+            entries.append((rel.as_posix(), file))
+    entries.sort(key=lambda item: item[0])
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as bundle:
-        for name in DIST_FILES:
-            path = SOURCE / name
-            if not path.exists():
-                raise RuntimeError(f'Required release file missing: {name}')
-            files = sorted(path.rglob('*')) if path.is_dir() else [path]
-            for file in files:
-                if not file.is_file() or any(p in IGNORED for p in file.relative_to(SOURCE).parts):
-                    continue
-                if file.suffix in {'.log', '.pyc'}:
-                    continue
-                bundle.write(file, Path('antigrative-dashboard') / file.relative_to(SOURCE))
+        for rel_posix, file in entries:
+            raw = file.read_bytes()
+            if file.suffix.lower() not in BINARY_SUFFIXES:
+                raw = raw.replace(b'\r\n', b'\n')
+            info = zipfile.ZipInfo(f'antigrative-dashboard/{rel_posix}', date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
+            mode = 0o755 if file.suffix.lower() == '.sh' else 0o644
+            info.external_attr = (0o100000 | mode) << 16
+            bundle.writestr(info, raw, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     output.with_suffix('.zip.sha256').write_text(f'{digest}  {output.name}\n', encoding='utf-8')
     print('Package:', output)

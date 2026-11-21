@@ -33,7 +33,8 @@ export function normalizeKey(str) {
     .replace(/^https?:\/\/[^\/]+\//, '')
     .replace(/^[~@]/, '')
     .replace(/^(?:google|anthropic|openai)\//, '')
-    .replace(/\((?:high|medium|low|neon|thinking)\)/gi, '')
+    .replace(/^orchestrator\s+(?=(?:gemini|claude|gpt|anthropic|google|openai|o[134])\b)/i, '')
+    .replace(/\((?:xhigh|extra\s+high|max|high|medium|low|neon|orchestrator|thinking|(?:xhigh|extra\s+high|max|high|medium|low)\s+thinking)\)/gi, '')
     .trim()
     .replace(/-(?:n|thinking|preview|latest)$/, '')
     .replace(/:batch$/, '')
@@ -68,16 +69,20 @@ export function resolveModelPricing(modelName, catalog = BUILTIN_MODELS) {
     if (kNorm.startsWith(norm) || norm.startsWith(kNorm)) return p;
   }
 
+  if (norm.includes('argon')) {
+    const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).includes('argon'));
+    if (candidate) return candidate[1];
+  }
   if (norm.includes('carbon')) {
     const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).includes('carbon'));
     if (candidate) return candidate[1];
   }
-  if (norm.includes('neon') || norm.includes('orchestrator')) {
-    const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).includes('neon'));
+  if (norm.includes('hydrogen')) {
+    const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).includes('hydrogen'));
     if (candidate) return candidate[1];
   }
-  if (norm.startsWith('gemini-4')) {
-    const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).startsWith('gemini-4'));
+  if (norm.includes('neon')) {
+    const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).includes('neon'));
     if (candidate) return candidate[1];
   }
   if (norm.includes('opus')) {
@@ -94,6 +99,14 @@ export function resolveModelPricing(modelName, catalog = BUILTIN_MODELS) {
   }
   if (norm.includes('flash')) {
     const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).includes('flash'));
+    if (candidate) return candidate[1];
+  }
+  if (norm.startsWith('gemini-4')) {
+    const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).startsWith('gemini-4'));
+    if (candidate) return candidate[1];
+  }
+  if (norm.includes('orchestrator')) {
+    const candidate = Object.entries(catalog).find(([k]) => normalizeKey(k).includes('neon'));
     if (candidate) return candidate[1];
   }
 
@@ -200,12 +213,12 @@ export class PricingService {
     try {
       const erPromise = fetch('https://open.er-api.com/v6/latest/USD', {
         signal: controller.signal,
-        headers: { 'User-Agent': 'AntigravityProgressBar/0.9.7' }
+        headers: { 'User-Agent': 'AntigravityProgressBar/0.9.11' }
       }).then(r => r.ok ? r.json() : null).catch(() => null);
 
       const orPromise = fetch('https://openrouter.ai/api/v1/models', {
         signal: controller.signal,
-        headers: { 'User-Agent': 'AntigravityProgressBar/0.9.7' }
+        headers: { 'User-Agent': 'AntigravityProgressBar/0.9.11' }
       }).then(r => r.ok ? r.json() : null).catch(() => null);
 
       const [erData, orData] = await Promise.all([erPromise, orPromise]);

@@ -106,8 +106,14 @@ test('parseLnkBuffer, shortcut filter and argument merging match Desktop shortcu
   assert.equal(isAntigravityDesktopShortcut('C:\\Users\\demo\\Desktop\\Antigravity.lnk', {
     target: 'C:\\Tools\\AntigravityProxy.exe', args: '', icon: 'C:\\Apps\\Antigravity.exe',
   }), true);
+  assert.equal(isAntigravityDesktopShortcut('C:\\Users\\demo\\Desktop\\Antigravity (Proxy).lnk', {
+    target: 'C:\\Tools\\AntigravityLauncher.exe', args: '', icon: 'C:\\Apps\\Antigravity.exe,0',
+  }), true);
   assert.equal(isAntigravityDesktopShortcut('C:\\Users\\demo\\Desktop\\Antigravity IDE - Dashboard Preview.lnk', {
     target: 'C:\\Tools\\AntigravityProxy.exe', args: '--ide', icon: 'D:\\IDE\\Antigravity IDE.exe',
+  }), false);
+  assert.equal(isAntigravityDesktopShortcut('C:\\Users\\demo\\Desktop\\Antigravity IDE.lnk', {
+    target: 'C:\\Tools\\AntigravityLauncher.exe', args: '--ide', icon: 'D:\\IDE\\Antigravity IDE.exe,0',
   }), false);
 
   const merged = mergeDebugArguments('--foo -- bar');

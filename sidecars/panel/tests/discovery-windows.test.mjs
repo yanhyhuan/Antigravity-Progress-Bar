@@ -261,3 +261,16 @@ test('recovered discovery reaches a real loopback RPC without proxying or creden
   assert.deepEqual(await client.call('GetUserStatus'),{ok:true});assert.equal(requests,1);
   assert.equal(calls.length,3);assert.doesNotMatch(JSON.stringify(calls),/csrf|fixture/);
 });
+
+test('Windows process enumeration timeouts and failures sanitize raw PowerShell commands',async()=>{
+  const timeoutErr=Object.assign(new Error('Command failed: powershell.exe -Command Get-CimInstance Win32_Process SECRET_CMD'),{killed:true,signal:'SIGTERM'});
+  await assert.rejects(
+    discoverProcesses({platform:'win32',run:async()=>{throw timeoutErr;}}),
+    err=>err.message==='读取 Antigravity 进程信息超时'&&!err.message.includes('powershell')&&!err.message.includes('SECRET_CMD'),
+  );
+  const genericErr=new Error('Command failed: powershell.exe -Command Get-CimInstance Win32_Process SECRET_CMD');
+  await assert.rejects(
+    discoverProcesses({platform:'win32',run:async()=>{throw genericErr;}}),
+    err=>err.message==='无法读取 Antigravity 进程信息'&&!err.message.includes('powershell')&&!err.message.includes('SECRET_CMD'),
+  );
+});

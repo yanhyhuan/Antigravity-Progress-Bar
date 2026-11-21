@@ -187,6 +187,15 @@ def has_debug_flags(args_text):
     return has_port, has_address
 
 
+_PROXY_LAUNCHER_TARGETS = frozenset({'antigravityproxy.exe', 'antigravitylauncher.exe'})
+_PROXY_DESKTOP_SHORTCUT_NAMES = frozenset({
+    'antigravity.lnk',
+    'antigravity (proxy).lnk',
+    'antigravity (代理).lnk',
+    'antigravity (прокси).lnk',
+})
+
+
 def is_antigravity_desktop_shortcut(shortcut_path, info):
     """Match Antigravity Desktop shortcuts while excluding Antigravity IDE shortcuts."""
     if not info or not info.get('target'):
@@ -197,10 +206,15 @@ def is_antigravity_desktop_shortcut(shortcut_path, info):
     target_name = PureWindowsPath(info['target']).name.lower()
     if target_name == 'antigravity.exe':
         return True
-    if target_name == 'antigravityproxy.exe':
-        shortcut_name = Path(shortcut_path).name.lower()
-        icon_name = PureWindowsPath(info.get('icon') or '').name.lower()
-        return shortcut_name == 'antigravity.lnk' or icon_name == 'antigravity.exe'
+    if target_name in _PROXY_LAUNCHER_TARGETS:
+        shortcut_name = PureWindowsPath(str(shortcut_path)).name.lower()
+        raw_icon = re.sub(r',-?\d+\s*$', '', str(info.get('icon') or ''))
+        icon_name = PureWindowsPath(raw_icon).name.lower() if raw_icon else ''
+        if icon_name == 'antigravity.exe':
+            return True
+        if icon_name == 'antigravity ide.exe':
+            return False
+        return shortcut_name in _PROXY_DESKTOP_SHORTCUT_NAMES
     return False
 
 

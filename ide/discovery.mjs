@@ -2,7 +2,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile,readdir} from 'node:fs/promises';
 import {join} from 'node:path';
-import {discoverWindowsPorts,parseLsof,linuxPorts,httpLogPorts,readLogTail} from '../sidecars/panel/discovery.mjs';
+import {discoverWindowsPorts,parseLsof,linuxPorts,httpLogPorts,readLogTail,discoveryCommandError} from '../sidecars/panel/discovery.mjs';
 const exec=promisify(execFile);
 // The IDE's 2.5.5 language server is deliberately identified by its native
 // name and its IDE sub-client flag.  Do not match the standalone/LSP server:
@@ -108,8 +108,20 @@ export async function discoverIdeProcesses(debugPort,{platform=process.platform,
     // 2.6 keeps the hub behind helper processes, so the bounded process table
     // also carries ancestry evidence. Keep the output capped while allowing a
     // normal Windows desktop process list with long command lines.
-    const r=await run('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{windowsHide:true,timeout:8000,maxBuffer:8388608});
-    const parsed=r.stdout.trim()?JSON.parse(r.stdout.replace(/^\uFEFF/,'')):[];rows=(Array.isArray(parsed)?parsed:[parsed]).filter(row=>processId(row?.ProcessId)!==null).map(row=>({...row,ProcessId:processId(row.ProcessId),ParentProcessId:processId(row.ParentProcessId)}));
+    const ideScanErrors={timedOut:'Timed out reading Antigravity IDE processes',failed:'Unable to read Antigravity IDE processes'};
+    let r;
+    try {
+      r=await run('powershell.exe',['-NoProfile','-NonInteractive','-Command',script],{windowsHide:true,timeout:8000,maxBuffer:8388608});
+    } catch(error) {
+      throw discoveryCommandError(error,ideScanErrors);
+    }
+    let parsed;
+    try {
+      parsed=r.stdout.trim()?JSON.parse(r.stdout.replace(/^\uFEFF/,'')):[];
+    } catch {
+      throw Error(ideScanErrors.failed);
+    }
+    rows=(Array.isArray(parsed)?parsed:[parsed]).filter(row=>processId(row?.ProcessId)!==null).map(row=>({...row,ProcessId:processId(row.ProcessId),ParentProcessId:processId(row.ParentProcessId)}));
     // An unrelated listener on a root PID is not proof that its renderer port
     // was discovered. TUN socket tables can omit that port while reporting
     // other listeners, so retain the expected CDP port for the shared fallback.
@@ -121,7 +133,13 @@ export async function discoverIdeProcesses(debugPort,{platform=process.platform,
     }));
     ports=await discoverWindowsPorts(known.map(row=>row.ProcessId),{run,expectedPorts});
   }else{
-    const {stdout}=await run('/bin/ps',['-ww','-axo','pid=,ppid=,uid=,args='],{timeout:8000,maxBuffer:4194304});
+    const ideScanErrors={timedOut:'Timed out reading Antigravity IDE processes',failed:'Unable to read Antigravity IDE processes'};
+    let stdout;
+    try {
+      ({stdout}=await run('/bin/ps',['-ww','-axo','pid=,ppid=,uid=,args='],{timeout:8000,maxBuffer:4194304}));
+    } catch(error) {
+      throw discoveryCommandError(error,ideScanErrors);
+    }
     rows=stdout.split(/\r?\n/).flatMap(line=>{
       const m=line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+)$/);if(!m||Number(m[3])!==uid)return [];
       const command=m[4];const first=commandTokens(command)[0]||'';const base=executableBase(first);let name;
@@ -140,7 +158,7 @@ export async function discoverIdeProcesses(debugPort,{platform=process.platform,
     for(const row of known){relevant.set(row.ProcessId,row);let current=row.ProcessId;for(let hop=0;hop<MAX_LINEAGE_HOPS;hop++){const parent=byPid.get(current)?.ParentProcessId;const parentId=processId(parent);if(parentId===null||relevant.has(parentId))break;const parentRow=byPid.get(parentId);if(!parentRow)break;relevant.set(parentId,parentRow);current=parentId;}}
     if(!known.length)throw Error('Waiting for Antigravity IDE processes');
     if(platform==='darwin'){
-      const {stdout}=await run('/usr/sbin/lsof',['-nP','-a','-p',[...relevant.keys()].join(','),'-iTCP','-sTCP:LISTEN','-Fpn'],{timeout:8000,maxBuffer:2097152}).catch(e=>{if(e.code===1)return{stdout:''};throw e;});
+      const {stdout}=await run('/usr/sbin/lsof',['-nP','-a','-p',[...relevant.keys()].join(','),'-iTCP','-sTCP:LISTEN','-Fpn'],{timeout:8000,maxBuffer:2097152}).catch(e=>{if(e.code===1)return{stdout:''};throw discoveryCommandError(e,ideScanErrors);});
       ports=parseLsof(stdout);
     }else if(platform==='linux')ports=new Map(await Promise.all([...relevant.values()].map(async r=>[r.ProcessId,await linuxPort(r.ProcessId).catch(()=>[])])));
     else throw Error('Unsupported IDE platform');

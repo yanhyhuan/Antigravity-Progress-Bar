@@ -1,26 +1,62 @@
 import { stat } from 'node:fs/promises';
-import { request } from 'node:http';
+import * as http from 'node:http';
+import * as https from 'node:https';
 import {setImmediate as yieldStream} from 'node:timers/promises';
 import { platformPaths } from '../../compat/platform.mjs';
-import { discoverProcesses,httpLogPorts,readLogTail } from './discovery.mjs';
+import { discoverProcesses,httpLogPorts,httpsLogPorts,readLogTail,probeLoopbackPort,isProcessAlive } from './discovery.mjs';
 import { TrajectoryJson } from './trajectory-json.mjs';
 import { TrajectoryReader } from './trajectory-reader.mjs';
 
 const SERVICE = '/exa.language_server_pb.LanguageServerService/';
-function serverFromPorts(logPorts, processes) {
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
+export function sidecarEnvEndpoint(env = process.env, { pid = null } = {}) {
+  const rawAddr = typeof env?.ANTIGRAVITY_LS_ADDRESS === 'string' ? env.ANTIGRAVITY_LS_ADDRESS.trim() : '';
+  const csrf = typeof env?.ANTIGRAVITY_CSRF_TOKEN === 'string' ? env.ANTIGRAVITY_CSRF_TOKEN.trim() : '';
+  if (!rawAddr || !csrf || /[\s\x00-\x1f\x7f]/.test(csrf)) return null;
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(rawAddr) ? rawAddr : `http://${rawAddr}`);
+  } catch {
+    return null;
+  }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:')
+    || url.username || url.password
+    || (url.pathname && url.pathname !== '/')
+    || url.search || url.hash
+    || !LOOPBACK_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+  const port = Number(url.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  const resolvedPid = Number.isSafeInteger(pid) && pid > 0
+    ? pid
+    : (Number.isSafeInteger(process.ppid) && process.ppid > 0 ? process.ppid : process.pid);
+  return { port, csrf, protocol: url.protocol === 'https:' ? 'https' : 'http', pid: resolvedPid, source: 'sidecar-env' };
+}
+
+function serverFromPorts(logPorts, processes, { httpsPorts = [], fallbackCsrf = null } = {}) {
   const rows = (Array.isArray(processes) ? processes : [processes]).filter(p => /--standalone\b/.test(p.CommandLine || ''));
   if (rows.length !== 1) throw new Error(rows.length ? '检测到多个 Antigravity 实例，请保留一个' : '未找到 Antigravity 桌面后台');
   const ports = new Set([rows[0].Ports].flat().map(Number));
-  const port = logPorts.find(p=>ports.has(p));
+  const httpPort = logPorts.find(p=>ports.has(p));
+  const httpsPort = !httpPort ? httpsPorts.find(p=>ports.has(p)) : undefined;
+  const port = httpPort || httpsPort;
   if (!port) throw new Error('等待 Antigravity 本地接口启动');
-  const csrf = rows[0].CommandLine.match(/--csrf_token(?:=|\s+)"?([^\s"]+)/)?.[1];
+  const csrf = rows[0].CommandLine.match(/--csrf_token(?:=|\s+)"?([^\s"]+)/)?.[1] || fallbackCsrf;
   if (!csrf) throw new Error('当前版本未提供可用的本地检测凭据');
-  return {port,csrf,pid:rows[0].ProcessId};
+  return { port, csrf, ...(httpsPort ? { protocol: 'https' } : {}), pid: rows[0].ProcessId };
 }
-export function serverFromDiscovery(log, processes) { return serverFromPorts(httpLogPorts(log),processes); }
+export function serverFromDiscovery(log, processes, options) {
+  return serverFromPorts(httpLogPorts(log), processes, { httpsPorts: httpsLogPorts(log), ...options });
+}
 export class AntigravityClient {
-  constructor({paths=platformPaths,readLog=readLogTail,logStat=stat,processes=discoverProcesses,now=Date.now,onRpc=null}={}) {
-    this.paths=paths;this.readLog=readLog;this.logStat=logStat;this.processes=processes;this.now=now;this.onRpc=onRpc;this.reader=new TrajectoryReader(this);
+  constructor(options = {}) {
+    const {paths=platformPaths,readLog=readLogTail,logStat=stat,processes=discoverProcesses,probe=probeLoopbackPort,pidAlive=isProcessAlive,parentPid=null,now=Date.now,onRpc=null}=options;
+    const hasDiscoveryOverrides=Boolean(options.paths||options.readLog||options.processes);
+    this.paths=paths;this.readLog=readLog;this.logStat=logStat;this.processes=processes;this.probe=probe;this.pidAlive=pidAlive;this.parentPid=parentPid;this.now=now;this.onRpc=onRpc;
+    this.env=Object.hasOwn(options,'env')?options.env:(hasDiscoveryOverrides?null:process.env);
+    this.reader=new TrajectoryReader(this);
   }
   server = null;
   discoveredAt = 0;
@@ -29,15 +65,31 @@ export class AntigravityClient {
   retryAt = 0;
   discoveryFailures = 0;
   discoveryError = null;
+  envRejected = false;
+
+  async verifyCachedServer(server) {
+    if (!server || (server.source !== 'sidecar-env' && !this.pidAlive(server.pid))) return false;
+    return await this.probe(server.port, { timeoutMs: 400 }).catch(() => false);
+  }
 
   async discover(force = false) {
     if (!force && this.server && this.now() - this.discoveredAt < 15000) return this.server;
     if (this.discovering) return this.discovering;
     if (!force && this.discoveryError && this.now() < this.retryAt) throw this.discoveryError;
-    this.lastScanAt=this.now();
-    this.discovering = this.discoverNow().then(server=>{
-      this.discoveredAt=this.now();this.discoveryFailures=0;this.discoveryError=null;this.retryAt=0;return server;
-    }).catch(error=>{
+    const cached = !force ? this.server : null;
+    this.discovering = (async () => {
+      if (cached && await this.verifyCachedServer(cached) && this.server === cached) {
+        this.discoveredAt = this.now();
+        return cached;
+      }
+      this.lastScanAt = this.now();
+      const server = await this.discoverNow();
+      this.discoveredAt = this.now();
+      this.discoveryFailures = 0;
+      this.discoveryError = null;
+      this.retryAt = 0;
+      return server;
+    })().catch(error=>{
       this.discoveryError=error;this.discoveryFailures++;
       this.retryAt=this.now()+Math.min(30000,3000*2**Math.min(4,this.discoveryFailures-1));throw error;
     }).finally(() => { this.discovering = null; });
@@ -46,48 +98,49 @@ export class AntigravityClient {
 
   async discoverNow() {
     this.server=null;
-    // A sidecar can outlive a renderer/backend restart. Its injected token may
-    // then refer to the previous LS instance; pair the current log port with
-    // the current standalone process credential instead of mixing generations.
+    // Antigravity 2.34+ removes --csrf_token from CLI argv and injects the
+    // official SidecarApp credentials (ANTIGRAVITY_LS_ADDRESS + ANTIGRAVITY_CSRF_TOKEN)
+    // directly into sidecar child processes. Verify loopback reachability before
+    // adopting them, and fall back to log/process discovery if absent or rejected.
+    const envServer = !this.envRejected ? sidecarEnvEndpoint(this.env, { pid: this.parentPid }) : null;
+    if (envServer && await this.probe(envServer.port, { timeoutMs: 400 }).catch(() => false)) {
+      this.server = envServer;
+      this.discoveredAt = this.now();
+      return this.server;
+    }
     const paths=this.paths(),logs=[],files=[...new Set(paths.logCandidates||[paths.log])];
     for(const file of files){
       try {
         let modifiedAt=null;
         if(files.length>1){try{const info=await this.logStat(file);if(Number.isFinite(info?.mtimeMs))modifiedAt=info.mtimeMs;}catch{}}
-        logs.push({ports:httpLogPorts(await this.readLog(file,'utf8')),modifiedAt});
+        const text=await this.readLog(file,'utf8');
+        logs.push({ports:httpLogPorts(text),httpsPorts:httpsLogPorts(text),modifiedAt});
       }
       catch(error) { logs.push({error}); }
     }
-    // Hosts can move the log from the profile into .gemini. Prefer the active
-    // file over a stale fallback path whose old HTTP port was reused by gRPC.
-    // Metadata only ranks hints: PID ownership is still checked below. Equal
-    // or unavailable timestamps keep the configured order; explicit overrides
-    // expose only one path and are not replaced by default locations.
     if(logs.every(entry=>entry.error||Number.isFinite(entry.modifiedAt))){
       logs.sort((a,b)=>{
         const first=a.modifiedAt??-Infinity,second=b.modifiedAt??-Infinity;
         return first===second?0:second-first;
       });
     }
-    // Another valid socket (for example gRPC) does not prove the HTTP socket
-    // is present. Supply log hints to trigger one bounded Windows fallback;
-    // the hinted ports still require independent live PID ownership proof.
-    const expectedPorts=[...new Set(logs.flatMap(log=>log.ports||[]))];
+    const expectedPorts=[...new Set(logs.flatMap(log=>[...(log.ports||[]),...(log.httpsPorts||[])]))];
     const parsed = await this.processes({expectedPorts});
     if (!parsed || Array.isArray(parsed) && !parsed.length) throw new Error('请先打开 Antigravity');
     // Credentials stay in process memory. They are never logged, persisted, or
     // returned to a browser; all calls go exclusively to 127.0.0.1.
     let foundLog=false,lastError=null;
+    const fallbackCsrf = envServer && !this.envRejected ? envServer.csrf : null;
     for(const entry of logs) {
       try {
         if(entry.error)throw entry.error;
         foundLog=true;
-        this.server=serverFromPorts(entry.ports,parsed);break;
+        this.server=serverFromPorts(entry.ports,parsed,{httpsPorts:entry.httpsPorts||[],fallbackCsrf});break;
       } catch(error) {
         if(error.code!=='ENOENT'&&error.code!=='ENOTDIR')lastError=error;
       }
     }
-    if(!this.server)throw lastError||new Error(foundLog?'等待 Antigravity 本地接口启动':'未找到 Antigravity 语言服务日志，请检查日志路径');
+    if(!this.server)throw lastError||new Error(foundLog||envServer?'等待 Antigravity 本地接口启动':'未找到 Antigravity 语言服务日志，请检查日志路径');
     this.discoveredAt = this.now();
     return this.server;
   }
@@ -99,9 +152,9 @@ export class AntigravityClient {
         const data = JSON.stringify(body);
         const projection=['GetCascadeTrajectory','GetCascadeTrajectorySteps','GetCascadeTrajectoryGeneratorMetadata','GetAllCascadeTrajectories'].includes(method);
         const started=this.now();
-        // A rejected stream destroys its socket. Do not leave that socket in
-        // the shared agent where an immediate quota refresh could reuse it.
-        const req = request({ hostname: '127.0.0.1', port: server.port, method: 'POST', path: SERVICE + method, ...(projection?{agent:false}:{}),
+        const isHttps=server.protocol==='https';
+        // Loopback-only self-signed TLS matches Antigravity's own setupLocalCertTrust / mendelFlagSync.
+        const req = (isHttps?https.request:http.request)({ hostname: '127.0.0.1', port: server.port, method: 'POST', path: SERVICE + method, ...(isHttps?{rejectUnauthorized:false,agent:false}:projection?{agent:false}:{}),
           headers: { 'Content-Type': 'application/json', 'Connect-Protocol-Version': '1', 'x-codeium-csrf-token': server.csrf, 'Content-Length': Buffer.byteLength(data) } }, res => {
           const projected=projection?new TrajectoryJson():null;
           let text = '',bytes=0,failed=false;
@@ -142,8 +195,10 @@ export class AntigravityClient {
     } catch (error) {
       // A missing historical cascade, busy API or malformed response does not
       // prove the process/credential changed. Do not launch CIM scans for it.
-      const endpointLost=[401,403].includes(error.status)||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN'].includes(error.code);
+      const authRejected=[401,403].includes(error.status);
+      const endpointLost=authRejected||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN'].includes(error.code);
       if(!endpointLost)throw error;
+      if(authRejected&&server.source==='sidecar-env')this.envRejected=true;
       // A late failure from an old endpoint cannot invalidate a newer one.
       if(this.server===server){
         this.server=null;this.discoveryError=error;
@@ -169,9 +224,10 @@ export class AntigravityClient {
     const started=this.now();let bytes=0,peakRetained=0,req,res,deadline,watch;
     const timeout=()=>Error('Antigravity 本地接口超时');
     const abort=error=>{streamError||=error;rejectAbort(streamError);res?.destroy();req?.destroy(streamError);};
+    const isHttps=server.protocol==='https';
     try {
       res=await new Promise((resolve,reject)=>{
-        req=request({hostname:'127.0.0.1',port:server.port,method:'POST',path:SERVICE+method,agent:false,
+        req=(isHttps?https.request:http.request)({hostname:'127.0.0.1',port:server.port,method:'POST',path:SERVICE+method,agent:false,...(isHttps?{rejectUnauthorized:false}:{}),
           headers:{'Content-Type':'application/json','Connect-Protocol-Version':'1','x-codeium-csrf-token':server.csrf,'Content-Length':Buffer.byteLength(input)}},resolve);
         req.on('error',error=>{streamError||=error;rejectAbort(streamError);reject(error);});req.setTimeout(12000,()=>abort(timeout()));
         deadline=setTimeout(()=>abort(timeout()),wallMs);deadline.unref();
@@ -197,7 +253,9 @@ export class AntigravityClient {
       try{this.onRpc?.({method,bytes,retainedBytes:peakRetained,ms:this.now()-started,streamed:true});}catch{}
       return result;
     } catch(error) {
-      const endpointLost=[401,403].includes(error?.status)||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN'].includes(error?.code);
+      const authRejected=[401,403].includes(error?.status);
+      const endpointLost=authRejected||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN'].includes(error?.code);
+      if(authRejected&&server.source==='sidecar-env')this.envRejected=true;
       if(endpointLost&&this.server===server){
         this.server=null;this.discoveryError=error;
         this.retryAt=Math.max(this.retryAt,this.lastScanAt+3000);

@@ -133,7 +133,7 @@ function renderPanelTrail(samples) {
   const key = speedStyle.style + '|' + samples.join(',');
   if (svg.dataset.renderKey === key) return;
   svg.dataset.renderKey = key;
-  const NS = 'http://www.w3.org/2000/svg', W = 120, H = 44, TOP = 14, snap = v => Math.round(v / 2) * 2;
+  const NS = 'http://www.w3.org/2000/svg', W = 120, H = 44, TOP = 14, r = v => Math.round(v * 10) / 10;
   if (speedStyle.style !== 'cat') {
     const node = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v)); return n; };
     const shape = language.minimalTrail(samples, { width: W, height: H, top: 5, bottom: 2, right: 4 });
@@ -148,11 +148,13 @@ function renderPanelTrail(samples) {
   if (samples.length) {
     const rawMax = Math.max(...samples), rawMin = Math.min(...samples), flat = rawMax === rawMin;
     const max = rawMax * 1.04, min = rawMin * 0.82, slots = Math.max(samples.length, 10), last = samples.length - 1;
-    const x = idx => snap(W - ((last - idx) * (W - 4)) / (slots - 1)), y = val => flat ? snap(Math.round(H * 0.55)) : snap(TOP + (H - TOP - 4) * (1 - (val - min) / (max - min || 1)));
-    start = Math.max(0, snap(x(0) - (W - 4) / (slots - 1)));
-    line = `M${start} ${y(samples[0])}`;
-    samples.forEach((v, idx) => { if (idx) line += `H${x(idx)}V${y(v)}`; });
-    line += `H${W - 2}`;
+    const x = idx => r(W - 4 - ((last - idx) * (W - 4)) / (slots - 1));
+    const y = val => r(flat ? H * 0.55 : TOP + (H - TOP - 4) * (1 - (val - min) / (max - min || 1)));
+    const pts = samples.map((v, idx) => [x(idx), y(v)]);
+    if (pts.length === 1) pts.unshift([r(Math.max(0, x(0) - (W - 4) / (slots - 1))), pts[0][1]]);
+    pts.push([W - 2, pts[pts.length - 1][1]]);
+    start = pts[0][0];
+    line = language.smoothCurve(pts);
   }
   svg.replaceChildren(
     el('line', { class: 'panel-speed-base', x1: 0, x2: W, y1: H - 0.5, y2: H - 0.5 }),
@@ -302,14 +304,25 @@ function render() {
   cacheAttr('aria-label',currentOnly?t('taskCurrentOnly'):null);
   cacheAttr('title',currentOnly?t('taskCurrentOnly'):null);
   const context=speed?.context,hasCapacity=typeof context?.usedFraction==='number';
+  const transcript=speed?.transcriptStats;
+  const compactions=transcript&&['ready','partial'].includes(transcript.status)&&typeof transcript.compactionMarkers==='number'?transcript.compactionMarkers:null;
+  const compSuffix=compactions!==null&&compactions>0?` · 🗜 ${t('contextCompactionCount',{n:compactions})}`:'';
   $('strip-context').textContent=hasCapacity?`${Math.round(context.usedFraction*100)}%`:'—';
   $('strip-context-size').textContent=context?`${compact(context.usedTokens)} / ${context.maxTokens===null?'—':compact(context.maxTokens)}`:'—';
-  $('context-tab').title=context?t('contextTokens',{used:count(context.usedTokens),max:context.maxTokens===null?'—':count(context.maxTokens)}):t('contextUnknown');
+  $('context-tab').title=(context?t('contextTokens',{used:count(context.usedTokens),max:context.maxTokens===null?'—':count(context.maxTokens)}):t('contextUnknown'))+compSuffix;
   $('context-summary').textContent=hasCapacity?t('contextUsed',{used:Math.round(context.usedFraction*100),remaining:Math.round(context.remainingFraction*100)}):t('contextUnknown');
   $('context-tokens').textContent=context?t('contextTokens',{used:compact(context.usedTokens),max:context.maxTokens===null?'—':compact(context.maxTokens)}):'—';
   $('context-model').textContent=context?.model||'—';
+  const compactionPill=$('context-compaction-pill');
+  if(compactionPill){
+    hidden('context-compaction-pill',!(compactions!==null&&compactions>0));
+    if(compactions!==null&&compactions>0){
+      compactionPill.textContent=`🗜 ${t('contextCompactionCount',{n:compactions})}`;
+      compactionPill.title=t('contextCompactionsTitle',{n:compactions});
+    }
+  }
   $('context-fill').style.width=hasCapacity?`${Math.min(1,context.usedFraction)*100}%`:'0%';
-  $('context-fill').style.background=hasCapacity&&context.usedFraction>=.9?'var(--pulse-danger)':'';
+  $('context-fill').style.background=hasCapacity&&context.usedFraction>=.9?'var(--pulse-danger)':hasCapacity&&context.usedFraction>=.75?'var(--pulse-warning)':'';
   if(hasCapacity){$('context-track').setAttribute('aria-valuenow',String(Math.min(100,context.usedFraction*100)));$('context-track').setAttribute('aria-valuemin','0');$('context-track').setAttribute('aria-valuemax','100');}else $('context-track').removeAttribute('aria-valuenow');
   text('strip-cache',percent(cache?.hitRate));text('cache-rate',percent(cache?.hitRate));
   const tokens=usage?.tokens || cache;
@@ -434,7 +447,7 @@ $('refresh-button').addEventListener('click', refreshManually);
 languagePicker=language.mountLanguagePicker({button:$('language-toggle'),parent:document.body,choose:value=>preferences.choose(value)});
 for(const button of document.querySelectorAll('[data-speed-style-choice]'))button.addEventListener('click',()=>void speedStyle.choose(button.dataset.speedStyleChoice));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
-window.addEventListener('pagehide',()=>{preferences.dispose();languagePicker.close(false);});
+window.addEventListener('pagehide',()=>{preferences.dispose();speedStyle.dispose();languagePicker.close(false);});
 window.addEventListener('pageshow',event=>{if(event.persisted)preferences=connectPreferences();});
 setInterval(updateCountdowns,1000);
 applySpeedStyle();

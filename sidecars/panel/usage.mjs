@@ -17,8 +17,9 @@ const keys=['uncached','cacheRead','cacheWrite','output'];
 export function quotaModelFamily(value){
   const s=String(value||'');
   if(/(?:^|[^a-z])argon(?:$|[^a-z])/i.test(s))return 'gemini-argon';
-  if(/gemini|hydrogen|carbon|orchestrator/i.test(s))return 'gemini';
+  if(/gemini|hydrogen|carbon|neon/i.test(s))return 'gemini';
   if(/claude|sonnet|opus|haiku|anthropic|gpt|openai/i.test(s)||/(?:^|[^a-z0-9])o[134](?:$|[^a-z0-9])/i.test(s)||/^3p(?:$|[-_])/i.test(s))return '3p';
+  if(/orchestrator/i.test(s))return 'gemini';
   return null;
 }
 export function classifyQuotaGroupId(groups,model){

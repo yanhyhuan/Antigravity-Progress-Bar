@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.11 — 2026-11-21
+
+- **Adapt Antigravity Desktop 2.34.0 local API credentials & port discovery:** Read the official Sidecar SDK `ANTIGRAVITY_LS_ADDRESS` and `ANTIGRAVITY_CSRF_TOKEN` loopback environment contract (since `2.34.0` removes `--csrf_token` from `language_server` CLI `argv`), support loopback HTTP/HTTPS Connect-RPC endpoints with automatic `401`/`403` fallback, and parse both `2.34.0` (`listening on loopback port at <N> for local HTTP (SDK/gRPC)` / `for HTTPS (gRPC)`) and legacy `language_server.log` banners across `readLogTail` (`>256 KiB` logs) and process discovery.
+- **Support 2.34.0 Orchestrator custom planners & effort levels:** Route `Orchestrator <Planner>` selector labels (such as `Orchestrator Claude Opus 5.5 (Max)`) to the matching `Claude / GPT`, `Gemini (Argon)`, or `Gemini` quota bucket instead of forcing all Orchestrator strings to `Gemini`, and normalize `(XHigh)`, `(Max)`, `(Orchestrator)`, and `(<effort> Thinking)` qualifiers in CNY/USD model pricing and context window identification.
+- **Sync upstream `v0.9.8`–`v0.9.10` improvements while preserving all custom features:** Add recorded context compaction count badges (`🗜 N×` / `🗜 N 次`) and `>=75%` warning ring/bar colors, deduplicate quota errors into `#quota-error`, sanitize raw PowerShell / `ps` command failures across all locales (`en` / `zh-CN` / `zh-TW`), renew idle discovery leases via fast PID + loopback checks without spawning PowerShell scans, support `AntigravityLauncher.exe` Windows proxy shortcuts, update CI host resource checks to `2.34.0-5887025308631040`, and retain the **3D Nailoong video-atlas mascot**, **CNY/USD cost analytics**, **24h hourly view**, and **Windows task completion notifications**.
+
 ## 0.9.7 — 2026-11-19
 
 - Add the **Neon (氖龙) interactive plush mascot Easter egg** in `compat/inline-widget.cjs`: when switching to a Neon model (e.g. `Orchestrator (Neon)`, `Gemini 4 Neon`), a compact baked two-frame WebP plushie (`~10.8 KB` total, zero external network assets) peeks out from the top-right border of the composer card inside an isolated Shadow DOM stage with zero host style mutations.

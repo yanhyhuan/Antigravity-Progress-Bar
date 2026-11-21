@@ -1,7 +1,7 @@
 import {AntigravityClient} from '../sidecars/panel/client.mjs';
 import {discoverIdeProcesses,discoverIdeLogPorts,agyServer,ideServer,ideHubPort} from './discovery.mjs';
 export class IdeClient extends AntigravityClient {
-  constructor({profile,debugPort,processes=discoverIdeProcesses,logPorts=discoverIdeLogPorts}={}){super();this.profile=profile;this.debugPort=debugPort;this.ideProcesses=processes;this.logPorts=logPorts;}
+  constructor({profile,debugPort,processes=discoverIdeProcesses,logPorts=discoverIdeLogPorts,probe,pidAlive,now}={}){super({env:null,...(probe?{probe}:{}),...(pidAlive?{pidAlive}:{}),...(now?{now}:{})});this.profile=profile;this.debugPort=debugPort;this.ideProcesses=processes;this.logPorts=logPorts;}
   async discoverNow(){
     this.server=null;
     // Missing old-profile logs must not block a 2.6 hub. Logs are optional

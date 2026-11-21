@@ -82,15 +82,24 @@ test('speed style controller saves choices, ignores stale polls and keeps a fail
   assert.deepEqual(cached.at(-1),'minimal');assert.ok(changes.length>=4);controller.dispose();
 });
 
-test('minimal sparkline geometry is right-aligned, bounded and ends on the latest sample',()=>{
+test('minimal sparkline geometry is right-aligned, smooth, bounded and ends on the latest sample',()=>{
   const language=create(null);
   assert.equal(language.minimalTrail([],{width:140,height:54}),null);
   const shape=language.minimalTrail([10,40,20,30],{width:140,height:54,top:6,bottom:2,right:4});
-  assert.match(shape.line,/^M[\d.]+ [\d.]+(L[\d.]+ [\d.]+){3}$/);assert.ok(shape.area.startsWith(shape.line)&&shape.area.endsWith('Z'));
+  assert.match(shape.line,/^M[\d.]+ [\d.]+(C[\d.]+ [\d.]+,[\d.]+ [\d.]+,[\d.]+ [\d.]+){3}$/);
+  assert.ok(shape.area.startsWith(shape.line)&&shape.area.endsWith('Z'));
   assert.equal(shape.end[0],136);
-  const ys=[...shape.line.matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map(m=>Number(m[2]));
-  assert.ok(ys.every(y=>y>=6&&y<=52));assert.ok(ys[1]<ys[0],'Higher speed is drawn higher');assert.equal(shape.end[1],ys.at(-1));
+  const anchors=[
+    ...[...shape.line.matchAll(/^M([\d.]+) ([\d.]+)/g)].map(m=>Number(m[2])),
+    ...[...shape.line.matchAll(/,([\d.]+) ([\d.]+)(?=C|$)/g)].map(m=>Number(m[2])),
+  ];
+  const allYs=[...shape.line.matchAll(/([\d.]+) ([\d.]+)/g)].map(m=>Number(m[2]));
+  assert.ok(allYs.every(y=>y>=6&&y<=52),'Monotone cubic control points never overshoot bounds');
+  assert.ok(anchors[1]<anchors[0],'Higher speed is drawn higher');assert.equal(shape.end[1],anchors.at(-1));
   const single=language.minimalTrail([25],{width:120,height:44});assert.equal(single.line,'M105.5 22.2L116 22.2','A single sample draws a short flat segment ending at the latest point');
+  const catCurve=language.smoothCurve([[0,24],[20,36],[40,28],[122,42],[136,42]]);
+  assert.doesNotMatch(catCurve,/[HV]/,'Cat speed trail uses smooth curves rather than staircase steps');
+  assert.match(catCurve,/L136 42$/,'Flat cat landing shelf ends cleanly at the right edge');
 });
 
 test('existing browser choice migrates once; durable preference overrides stale browser storage',async t=>{

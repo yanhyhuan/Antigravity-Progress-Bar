@@ -3,7 +3,7 @@
   "displayName": "Antigravity Progress Bar",
   "display_name": "Antigravity Progress Bar",
   "description": "Token throughput, cache hit, context window, quota forecast, 24h hourly usage, CNY/USD cost dashboard, and Windows task completion notifications.",
-  "version": "0.9.7",
+  "version": "0.9.11",
   "logo": "assets/logo.svg",
   "license": "MIT",
   "author": {

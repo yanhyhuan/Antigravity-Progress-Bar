@@ -295,3 +295,16 @@ test('macOS lsof duplicate owners are retained; Electron helpers cannot win a sh
  const run=async file=>({stdout:file==='/bin/ps'?ps:'p10\nn127.0.0.1:9000\np20\nn127.0.0.1:9000\nn127.0.0.1:8000\np30\nn127.0.0.1:9000'});
  const result=await discoverIdeProcesses(9000,{platform:'darwin',uid:501,run});assert.equal(result.rootPid,10);assert.equal(result.ProcessId,20);
 });
+
+test('IDE process discovery sanitizes PowerShell and ps command failures and timeouts',async()=>{
+ const timeoutErr=Object.assign(new Error('Command failed: powershell.exe -NoProfile Get-CimInstance SECRET'),{code:'ETIMEDOUT'});
+ await assert.rejects(
+  discoverIdeProcesses(9000,{platform:'win32',run:async()=>{throw timeoutErr;}}),
+  err=>err.message==='Timed out reading Antigravity IDE processes'&&!err.message.includes('powershell'),
+ );
+ const genericErr=new Error('Command failed: /bin/ps -axww SECRET');
+ await assert.rejects(
+  discoverIdeProcesses(9000,{platform:'darwin',uid:501,run:async()=>{throw genericErr;}}),
+  err=>err.message==='Unable to read Antigravity IDE processes'&&!err.message.includes('/bin/ps'),
+ );
+});

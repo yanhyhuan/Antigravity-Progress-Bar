@@ -104,6 +104,11 @@ test('equivalent model IDs normalize identically without changing versions or in
  assert.equal(formatModelName('MODEL_PLACEHOLDER_M35'),'Claude Sonnet 4.6 (Thinking)');
  assert.equal(formatModelName('MODEL_PLACEHOLDER_M26'),'Claude Opus 4.6 (Thinking)');
  assert.equal(formatModelName('MODEL_OPENAI_GPT_OSS_120B_MEDIUM'),'GPT-OSS 120B (Medium)');
+ assert.equal(formatModelName('Claude Opus 5.5 (Max)'),'Claude Opus 5.5 (Max)');
+ assert.equal(formatModelName('Claude Sonnet 5.5 (XHigh)'),'Claude Sonnet 5.5 (XHigh)');
+ assert.equal(modelContextReference('Claude Opus 5.5 (Max)')?.label,'1M');
+ assert.equal(formatModelName('Gemini 3.8 Flash (XHigh)'),'Gemini 3.8 Flash (XHigh)');
+ assert.equal(modelContextCapacity('Gemini 3.8 Flash (XHigh)'),1048576);
 });
 test('unknown/family/specialized model names never inherit another model reference',()=>{
  for(const model of ['Gemini','gemini-3.8-flash-tts','gemini-3.8-flash-lite','Claude','claude-sonnet-4-5','claude-sonnet-4','claude-sonnet-5-5-custom','gpt-oss','gpt-oss-20b','MODEL_PLACEHOLDER_M317','MODEL_PLACEHOLDER_M421','user-gemini-3.8-flash-custom']){

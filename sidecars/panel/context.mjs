@@ -11,17 +11,18 @@ const aliases=new Map([
 ]);
 // Placeholder aliases above were checked against the installed host's model
 // catalog on 2026-10-14. Unknown placeholders stay unknown, not a family guess.
+const capEffort=value=>value==='xhigh'?'XHigh':value[0].toUpperCase()+value.slice(1);
 function identify(model){
  if(typeof model!=='string')return null;
  let name=model.replace(/[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/g,'').trim().slice(0,256);
  if(!name)return null;name=aliases.get(name.toLowerCase())||name;
  const normalized=name.toLowerCase().replace(/(\d)[._-](\d)/g,'$1.$2').replace(/[\s()_]+/g,'-').replace(/-+$/,'');
- let match=normalized.match(/^gemini-3\.8-flash(?:-(n|high|medium|low))?$/);
- if(match)return {key:'gemini-3.8-flash',display:'Gemini 3.8 Flash'+(match[1]&&match[1]!=='n'?` (${match[1][0].toUpperCase()+match[1].slice(1)})`:'')};
- match=normalized.match(/^claude-(sonnet|opus)-(4\.6|5\.5)(?:-(thinking|high|medium|low))?(?:-\d{8})?$/);
- if(match)return {key:`claude-${match[1]}-${match[2]}`,display:`Claude ${match[1][0].toUpperCase()+match[1].slice(1)} ${match[2]}`+(match[3]?` (${match[3][0].toUpperCase()+match[3].slice(1)})`:'')};
- match=normalized.match(/^gpt-oss-120b(?:-(high|medium|low))?$/);
- if(match)return {key:'gpt-oss-120b',display:'GPT-OSS 120B'+(match[1]?` (${match[1][0].toUpperCase()+match[1].slice(1)})`:'')};
+ let match=normalized.match(/^gemini-3\.8-flash(?:-(n|xhigh|max|high|medium|low))?$/);
+ if(match)return {key:'gemini-3.8-flash',display:'Gemini 3.8 Flash'+(match[1]&&match[1]!=='n'?` (${capEffort(match[1])})`:'')};
+ match=normalized.match(/^claude-(sonnet|opus)-(4\.6|5\.5)(?:-(thinking|max|xhigh|high|medium|low))?(?:-\d{8})?$/);
+ if(match)return {key:`claude-${match[1]}-${match[2]}`,display:`Claude ${match[1][0].toUpperCase()+match[1].slice(1)} ${match[2]}`+(match[3]?` (${capEffort(match[3])})`:'')};
+ match=normalized.match(/^gpt-oss-120b(?:-(xhigh|max|high|medium|low))?$/);
+ if(match)return {key:'gpt-oss-120b',display:'GPT-OSS 120B'+(match[1]?` (${capEffort(match[1])})`:'')};
  return {key:null,display:name};
 }
 export function formatModelName(model){return identify(model)?.display||null;}

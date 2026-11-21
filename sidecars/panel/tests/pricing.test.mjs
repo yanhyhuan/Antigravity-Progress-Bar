@@ -19,11 +19,21 @@ test('normalizeKey handles prefixes, suffixes, qualifiers, and punctuation consi
   assert.equal(normalizeKey('~anthropic/claude-opus-latest'), 'claude-opus');
   assert.equal(normalizeKey('Claude 3.5 Sonnet'), 'claude-3.5-sonnet');
   assert.equal(normalizeKey('Gemini 4 Carbon (High)'), 'gemini-4-carbon');
+  assert.equal(normalizeKey('Gemini 4 Neon (XHigh)'), 'gemini-4-neon');
+  assert.equal(normalizeKey('Gemini 4 Hydrogen (Orchestrator)'), 'gemini-4-hydrogen');
+  assert.equal(normalizeKey('Claude Opus 5.5 (Max)'), 'claude-opus-5.5');
+  assert.equal(normalizeKey('Claude Sonnet 5.5 (Max Thinking)'), 'claude-sonnet-5.5');
+  assert.equal(normalizeKey('Orchestrator Claude Opus 5.5 (Max)'), 'claude-opus-5.5');
 });
 
 test('resolveModelPricing matches diverse model IDs including Carbon and Neon families', () => {
   assert.equal(resolveModelPricing('Gemini 4 Carbon (High)', BUILTIN_MODELS)?.prompt, 0.000002);
+  assert.equal(resolveModelPricing('Gemini 4 Neon (XHigh)', BUILTIN_MODELS)?.prompt, 0.00000125);
+  assert.equal(resolveModelPricing('Gemini 4 Hydrogen (Orchestrator)', BUILTIN_MODELS)?.prompt, 0.00000075);
+  assert.equal(resolveModelPricing('Claude Opus 5.5 (Max)', BUILTIN_MODELS)?.prompt, 0.000004);
+  assert.equal(resolveModelPricing('Orchestrator Claude Opus 5.5 (Max)', BUILTIN_MODELS)?.prompt, 0.000004);
   assert.equal(resolveModelPricing('Orchestrator (Neon)', BUILTIN_MODELS)?.prompt, 0.00000125);
+  assert.equal(resolveModelPricing('Orchestrator', BUILTIN_MODELS)?.prompt, 0.00000125);
   assert.equal(resolveModelPricing('gemini-3.8-flash-n', BUILTIN_MODELS)?.prompt, 0.00000075);
   assert.equal(resolveModelPricing('claude-opus-4-6-thinking', BUILTIN_MODELS)?.prompt, 0.000005);
   assert.equal(resolveModelPricing('claude-opus-4.6', BUILTIN_MODELS)?.prompt, 0.000005);

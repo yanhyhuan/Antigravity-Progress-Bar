@@ -1,11 +1,10 @@
-# Antigravity Progress Bar v0.9.7
+# Antigravity Progress Bar v0.9.11
 
-Merged release combining upstream `v0.9.7` with enhanced local usage & cost analytics:
+Release adapting **Antigravity Desktop 2.34.0**, syncing upstream `v0.9.8`–`v0.9.10`, and retaining all enhanced usage, cost, notification, and 3D Nailoong mascot features:
 
-- **CNY (`¥`) / USD (`$`) Cost Estimation & Sorting:** Automatic 24h-cached exchange rate and OpenRouter model pricing lookup with offline fallbacks for `Gemini 4 Carbon / Neon / Hydrogen`, `Claude Opus / Sonnet`, and `GPT 5.4`, plus full column sorting in Usage Details.
-- **24-Hour Hourly Activity View:** Switch between **Daily**, **Weekly**, and **24h Hourly** activity in the Overview tab, retaining 120 days of per-hour breakdowns alongside quick day pills and composition bars.
-- **Interactive Filtering & Drill-down:** Exclude individual token components (`Uncached` / `Cache read` / `Output`) with live strikethrough recalculation, `Alt+click` to isolate a model, hide unused models, fold `<0.1%` dormant trace models, and click any chart bar to drill down.
-- **Full Upstream v0.9.7 Capabilities:** Antigravity Desktop `2.33.0+` & IDE `2.6.0` compatibility, `0.9.5` metadata-only low-memory backfill, `All local` / `Current account` scope switcher, 5h/weekly quota pace forecasts, Pixel Cat speed card, and the interactive **Neon (氖龙)** plush mascot Easter egg.
+- **Antigravity Desktop 2.34.0 Adaptation:** Connects via the official Sidecar SDK `ANTIGRAVITY_LS_ADDRESS` & `ANTIGRAVITY_CSRF_TOKEN` loopback contract (fixing `Local metrics credentials are unavailable` after `2.34.0` removed CLI `--csrf_token`), supports the new `local HTTP (SDK/gRPC)` / `HTTPS (gRPC)` log banners, and accurately classifies `2.34.0` custom Orchestrator planners (`Orchestrator Claude Opus 5.5 (Max)`, `(XHigh)`, `(Max)`).
+- **Context Compaction Pill & Hardened Discovery (`v0.9.8`–`v0.9.10`):** Displays recorded conversation compactions (`🗜 N×` / `🗜 N 次`) with `75%` warning ring colors, deduplicates quota errors, sanitizes PowerShell/`ps` subprocess errors across all locales, avoids idle PowerShell rescans, and supports `AntigravityLauncher.exe` Windows proxy shortcuts.
+- **CNY (`¥`) / USD (`$`) Cost Estimation, 24h Hourly View & Interactive Filters:** Automatic 24h-cached exchange rate and OpenRouter pricing lookup with offline fallbacks, 120-day per-hour activity breakdowns, token component toggles, bar drill-down, **3D Nailoong** interactive companion, and **Windows task completion notifications**.
 
 ## Install or update
 

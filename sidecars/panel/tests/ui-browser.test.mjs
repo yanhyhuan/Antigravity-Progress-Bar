@@ -105,7 +105,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
   const id = '11111111-1111-1111-1111-111111111111';
   let prefs = { language: 'zh-CN', languageGuideDismissed: true, usageGuideDismissed: true, usageScope: 'local', revision: 1 };
   let panelTheme = { fontFamily: "'Fira Code'", mode: 'dark', dark: { background: '#1e1e1e' } };
-  let signedIn = true, slowFullPoll = false, stressModels = false, billionSpeed = false, usageOnlyCalls = 0, integrationState = null;
+  let signedIn = true, slowFullPoll = false, stressModels = false, billionSpeed = false, usageOnlyCalls = 0, integrationState = null, compactionMarkers = 0, quotaErrMsg = null;
   const reset5h = new Date(Date.now() + 3 * 3600000).toISOString();
   const resetWk = new Date(Date.now() + 5 * 86400000).toISOString();
   const stressModelList = [
@@ -172,7 +172,8 @@ test('font sync, scope switching and quota window reference render end-to-end in
     };
   };
   const metricsPayload = (overrideScope = null) => ({
-    connection: 'live',
+    connection: quotaErrMsg ? 'stale' : 'live',
+    ...(quotaErrMsg ? { error: quotaErrMsg } : {}),
     theme: panelTheme,
     preferences: prefs,
     serverTime: new Date().toISOString(),
@@ -180,7 +181,10 @@ test('font sync, scope switching and quota window reference render end-to-end in
     groups: [{ id: 'gemini', name: 'Gemini', windows: { '5h': { available: true, remaining: 0.874, resetAt: reset5h }, weekly: { available: true, remaining: 0.399, resetAt: resetWk } } }],
     usage: usageData(overrideScope),
     ...(integrationState ? { integration: integrationState } : {}),
-    speed: trajectoryMetrics({ trajectory: { cascadeId: id, steps: [{ type: 'USER_INPUT' }], generatorMetadata: [{ chatModel: { modelDisplayName: 'Gemini 4 Hydrogen (XHigh)', chatStartMetadata: { contextWindowMetadata: { estimatedTokensUsed: 100000, maxContextTokens: 512000 } }, usage: billionSpeed ? { messageId: 'm2', inputTokens: '80000000', cacheReadTokens: '1150000000', outputTokens: '4567890', responseOutputTokens: '4000000', apiProvider: 'API_PROVIDER_GOOGLE_GEMINI' } : { messageId: 'm1', inputTokens: '5384106', cacheReadTokens: '55937971', outputTokens: '473719', responseOutputTokens: '400000', apiProvider: 'API_PROVIDER_GOOGLE_GEMINI' }, streamingDuration: '2s' } }] } }),
+    speed: {
+      ...trajectoryMetrics({ trajectory: { cascadeId: id, steps: [{ type: 'USER_INPUT' }], generatorMetadata: [{ chatModel: { modelDisplayName: 'Gemini 4 Hydrogen (XHigh)', chatStartMetadata: { contextWindowMetadata: { estimatedTokensUsed: 100000, maxContextTokens: 512000 } }, usage: billionSpeed ? { messageId: 'm2', inputTokens: '80000000', cacheReadTokens: '1150000000', outputTokens: '4567890', responseOutputTokens: '4000000', apiProvider: 'API_PROVIDER_GOOGLE_GEMINI' } : { messageId: 'm1', inputTokens: '5384106', cacheReadTokens: '55937971', outputTokens: '473719', responseOutputTokens: '400000', apiProvider: 'API_PROVIDER_GOOGLE_GEMINI' }, streamingDuration: '2s' } }] } }),
+      ...(compactionMarkers > 0 ? { transcriptStats: { status: 'ready', compactionMarkers } } : {}),
+    },
   });
   const inlineHtml = `<!doctype html><html><head><meta charset="utf-8"><style>
     body{margin:0;padding:40px;background:#17181a;color:#ddd;font:13px "Segoe UI",sans-serif}
@@ -609,6 +613,33 @@ test('font sync, scope switching and quota window reference render end-to-end in
   await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('week-usage-value').textContent === '129.9M toks (約 216.2M 滿額)'`, 'zh-TW quota window label');
   await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('card-language-zh').click()`);
   await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('week-usage-value').textContent === '129.9M toks (约 216.2M 满额)'`, 'restore zh-CN');
+
+  // Verify compaction pill and deduplicated #quota-error on inline widget
+  compactionMarkers = 2;
+  quotaErrMsg = '读取 Antigravity 进程信息超时';
+  await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.querySelector('.refresh').click()`);
+  await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('context-compaction-pill').textContent === '🗜 2 次'`, 'inline compaction pill rendered');
+  const inlineCompactionAndErr = await evalJs(`() => {
+    const sr = document.getElementById('ag-pulse-status-bar').shadowRoot;
+    return {
+      pillHidden: sr.getElementById('context-compaction-pill').hidden,
+      pillText: sr.getElementById('context-compaction-pill').textContent,
+      ctxChipTitle: sr.querySelector('[data-card="context"]').getAttribute('title'),
+      quotaErrHidden: sr.getElementById('quota-error').hidden,
+      quotaErrText: sr.getElementById('quota-error').textContent,
+      fiveNoteHidden: sr.getElementById('five-note').hidden,
+      weekNoteHidden: sr.getElementById('week-note').hidden,
+    };
+  }`);
+  assert.equal(inlineCompactionAndErr.pillHidden, false);
+  assert.equal(inlineCompactionAndErr.pillText, '🗜 2 次');
+  assert.ok(inlineCompactionAndErr.ctxChipTitle.includes('🗜 2 次'), 'ctxChip title includes compaction count: ' + inlineCompactionAndErr.ctxChipTitle);
+  assert.equal(inlineCompactionAndErr.quotaErrHidden, false);
+  assert.equal(inlineCompactionAndErr.quotaErrText, '读取 Antigravity 进程信息超时');
+  assert.equal(inlineCompactionAndErr.fiveNoteHidden, true, 'quotaError should not duplicate inside five-note');
+  assert.equal(inlineCompactionAndErr.weekNoteHidden, true, 'quotaError should not duplicate inside week-note');
+  compactionMarkers = 0;
+  quotaErrMsg = null;
 
   // 2. Navigate to Sidecar Panel and verify Fira Code font sync + compact quota height + toks cache card
   signedIn = true;
