@@ -47,6 +47,7 @@ function killBrowser(child) {
 async function launchBrowser(userDataDir, initialUrl) {
   const child = spawn(EDGE_EXE, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+    '--disable-extensions', '--disable-background-networking',
     '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`, initialUrl,
   ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   child.unref();
@@ -77,6 +78,7 @@ async function launchBrowser(userDataDir, initialUrl) {
     cdp = new CdpConnection(target.webSocketDebuggerUrl, { timeout: 30000 });
     await cdp.open();
     await cdp.command('Runtime.enable');
+    await cdp.command('Page.enable');
     return { child, cdp };
   } catch (err) {
     try { cdp?.close(); } catch {}
@@ -160,7 +162,8 @@ test('merged usage dashboard renders 24h hourly view, CNY/USD cost sorting, comp
 
     server = createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(html); });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    ({ child, cdp } = await launchBrowser(userDataDir, `http://127.0.0.1:${server.address().port}`));
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    ({ child, cdp } = await launchBrowser(userDataDir, baseUrl));
 
     const evalJs = async expr => {
       const res = await cdp.command('Runtime.evaluate', { expression: `(${expr})()`, awaitPromise: true, returnByValue: true });
@@ -168,10 +171,18 @@ test('merged usage dashboard renders 24h hourly view, CNY/USD cost sorting, comp
       return res.result?.value;
     };
 
-    for (let i = 0; i < 100; i++) {
-      if (await evalJs(`() => Boolean(document.getElementById('host')?.shadowRoot?.getElementById('usage-dashboard')?.open)`)) break;
-      await new Promise(r => setTimeout(r, 50));
+    const deadline = Date.now() + 25000;
+    let retriedNav = false, ready = false;
+    while (Date.now() < deadline) {
+      ready = Boolean(await evalJs(`() => Boolean(document.getElementById('host')?.shadowRoot?.getElementById('usage-dashboard')?.open)`).catch(() => false));
+      if (ready) break;
+      if (!retriedNav && deadline - Date.now() < 18000) {
+        retriedNav = true;
+        await cdp.command('Page.navigate', { url: baseUrl }).catch(() => {});
+      }
+      await new Promise(r => setTimeout(r, 80));
     }
+    assert.equal(ready, true, 'Usage dashboard dialog failed to open within 25s');
 
     // 1. Verify overview totals show CNY estimated cost and selection composition bar
     const overviewState = await evalJs(`() => {
