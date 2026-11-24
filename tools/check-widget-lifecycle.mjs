@@ -9,7 +9,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const repo=join(dirname(fileURLToPath(import.meta.url)),'..');
 const extract=s=>s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'');
-const [i18n,theme,usage]=await Promise.all(['i18n','theme','usage-ui'].map(n=>readFile(join(repo,'compat',n+'.cjs'),'utf8')));
+const [i18n,theme,pricing,usage]=await Promise.all(['i18n','theme','pricing','usage-ui'].map(n=>readFile(join(repo,'compat',n+'.cjs'),'utf8')));
 const widget=process.env.AG_PULSE_WIDGET_SOURCE?await readFile(process.env.AG_PULSE_WIDGET_SOURCE,'utf8'):
   process.argv.includes('--source-head')?execFileSync('git',['show','HEAD:compat/inline-widget.cjs'],{cwd:repo,encoding:'utf8'}):await readFile(join(repo,'compat/inline-widget.cjs'),'utf8');
 const id='11111111-1111-1111-1111-111111111111';
@@ -17,7 +17,7 @@ const usageData={accountKey:'fixture',today:'2026-10-28',timeZone:'Asia/Shanghai
 const html=`<!doctype html><html><head><meta charset="utf-8"><style>
 body{margin:0;background:#17181a;color:#ddd;font:13px 'Segoe UI';padding:40px}.composer{width:980px;margin:220px auto 0;background:#27282a;padding:12px;border-radius:18px}.editor{height:48px}.actions{display:flex;align-items:center;gap:5px;height:32px}.left{display:flex;flex:none;min-width:0}.right{display:flex;gap:5px;margin-left:auto}button{background:transparent;border:0;color:inherit;height:28px;white-space:nowrap}
 </style></head><body><section class="composer"><div class="editor" role="textbox" contenteditable="true"></div><div class="actions"><div class="left"><button id="native-add">＋</button><button data-testid="model-selector-trigger">Gemini</button></div><div class="right"><button id="native-mic" aria-label="Record voice memo">♩</button><button id="native-send" aria-label="Send message">➜</button></div></div></section><script>
-history.replaceState({},'', '/c/${id}');window.__agPulseI18nFactory=(${extract(i18n)});window.__agPulseThemeFactory=(${extract(theme)});window.__agPulseUsageFactory=(${extract(usage)});window.fixtureFactory=(${extract(widget)});
+history.replaceState({},'', '/c/${id}');window.__agPulseI18nFactory=(${extract(i18n)});window.__agPulseThemeFactory=(${extract(theme)});window.__agPulsePricingFactory=(${extract(pricing)});window.__agPulseUsageFactory=(${extract(usage)});window.fixtureFactory=(${extract(widget)});
 window.fixtureReady=[];window.fixtureGeneration=0;window.fixtureCalls=[];window.nativeClicks=0;document.getElementById('native-send').onclick=()=>nativeClicks++;
 window.fixtureHost=(generation,deferred=false)=>{
  const prefs={language:generation===0?'en':'zh-CN',languageGuideDismissed:true,usageGuideDismissed:true,revision:generation+1};

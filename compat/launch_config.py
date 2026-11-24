@@ -245,16 +245,139 @@ def strip_debug_arguments(args_text, remove_flags=DEBUG_ARGS):
     return ' '.join(kept)
 
 
-def _windows_shortcut_roots(home, env):
+_WINDOWS_KNOWN_FOLDER_IDS = {
+    'Desktop': '{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}',
+    'Programs': '{A77F5D77-2E2B-44C3-A6A2-ABA601054A51}',
+}
+
+
+def _expand_windows_env(value, env):
+    """Expand %VAR% references case-insensitively against env."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    mapping = {str(k).upper(): str(v) for k, v in (env or {}).items() if v is not None}
+
+    def replace(match):
+        name = match.group(1).upper()
+        return mapping.get(name, match.group(0))
+
+    expanded = re.sub(r'%([^%]+)%', replace, value.strip())
+    if not expanded or re.search(r'%[^%]+%', expanded):
+        return None
+    if os.name != 'nt' and expanded.startswith('/'):
+        expanded = expanded.replace('\\', '/')
+    return expanded
+
+
+def _resolve_windows_known_folder(folder_name, env=None):
+    """Query Windows Known Folder API (zero subprocess) with registry fallback."""
+    if os.name != 'nt':
+        return None
+    folder_id = _WINDOWS_KNOWN_FOLDER_IDS.get(folder_name)
+    if folder_id:
+        try:
+            import ctypes
+            import uuid
+
+            shell32 = ctypes.windll.shell32
+            ole32 = ctypes.windll.ole32
+            guid_buf = (ctypes.c_ubyte * 16).from_buffer_copy(uuid.UUID(folder_id).bytes_le)
+            path_ptr = ctypes.c_void_p()
+            shell32.SHGetKnownFolderPath.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
+            shell32.SHGetKnownFolderPath.restype = ctypes.c_long
+            ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+            ole32.CoTaskMemFree.restype = None
+            hr = shell32.SHGetKnownFolderPath(ctypes.byref(guid_buf), 0, None, ctypes.byref(path_ptr))
+            try:
+                if hr == 0 and path_ptr.value:
+                    value = ctypes.wstring_at(path_ptr.value).strip()
+                    if value:
+                        return Path(value)
+            finally:
+                if path_ptr.value:
+                    ole32.CoTaskMemFree(path_ptr)
+        except Exception:
+            pass
+    try:
+        import winreg
+
+        for subkey in (
+            r'Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders',
+            r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders',
+        ):
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey) as key:
+                    raw, _ = winreg.QueryValueEx(key, folder_name)
+                expanded = _expand_windows_env(raw, env if env is not None else os.environ)
+                if expanded:
+                    return Path(expanded)
+            except OSError:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def _windows_shortcut_roots(home, env, known_folder_resolver=None):
     home = Path(home) if home is not None else Path.home()
+    explicit_env = env is not None and env is not os.environ
     env = os.environ if env is None else env
     is_real_home = home.resolve() == Path.home().resolve()
     appdata = Path(env['APPDATA']) if (is_real_home and env.get('APPDATA')) else (home / 'AppData' / 'Roaming')
-    return [
-        home / 'Desktop',
-        appdata / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs',
-        appdata / 'Microsoft' / 'Internet Explorer' / 'Quick Launch' / 'User Pinned' / 'TaskBar',
-    ]
+    resolver = known_folder_resolver if known_folder_resolver is not None else (
+        (lambda name: _resolve_windows_known_folder(name, env)) if (is_real_home and os.name == 'nt') else None
+    )
+
+    def resolve_folder(name):
+        if resolver is None:
+            return None
+        try:
+            value = resolver(name)
+        except Exception:
+            return None
+        if isinstance(value, Path):
+            return value if str(value).strip() else None
+        if isinstance(value, str) and value.strip():
+            expanded = _expand_windows_env(value, env)
+            return Path(expanded) if expanded else None
+        return None
+
+    candidates = []
+    desktop_known = resolve_folder('Desktop')
+    if desktop_known is not None:
+        candidates.append(desktop_known)
+    if is_real_home or explicit_env:
+        for key in ('OneDrive', 'OneDriveConsumer', 'OneDriveCommercial'):
+            od = env.get(key)
+            if isinstance(od, str) and od.strip():
+                candidates.append(Path(od.strip()) / 'Desktop')
+    candidates.append(home / 'Desktop')
+
+    programs_known = resolve_folder('Programs')
+    if programs_known is not None:
+        candidates.append(programs_known)
+    candidates.append(appdata / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs')
+    candidates.append(appdata / 'Microsoft' / 'Internet Explorer' / 'Quick Launch' / 'User Pinned' / 'TaskBar')
+
+    roots = []
+    seen = set()
+    for path in candidates:
+        raw = str(path).strip()
+        if not raw:
+            continue
+        norm = raw.rstrip('\\/')
+        if len(norm) == 2 and norm[1] == ':':
+            norm += '\\'
+        key = norm.casefold()
+        if key not in seen:
+            seen.add(key)
+            roots.append(path)
+    return roots
 
 
 def _iter_lnk_files(roots):
@@ -283,18 +406,27 @@ def write_windows_shortcut_args(updates, runner=subprocess.run):
         return
     script = (
         "$ErrorActionPreference = 'Stop'\n"
+        "[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)\n"
+        "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)\n"
         "$payload = [Console]::In.ReadToEnd() | ConvertFrom-Json\n"
         "$ws = New-Object -ComObject WScript.Shell\n"
         "foreach ($u in @($payload)) {\n"
         "  $item = Get-Item -LiteralPath $u.path\n"
         "  if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing linked shortcut' }\n"
-        "  $s = $ws.CreateShortcut($u.path)\n"
-        "  $s.Arguments = [string]$u.args\n"
-        "  $s.Save()\n"
+        "  $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ag-lnk-' + [guid]::NewGuid().ToString('N') + '.lnk')\n"
+        "  try {\n"
+        "    Copy-Item -LiteralPath $u.path -Destination $tmp -Force\n"
+        "    $s = $ws.CreateShortcut($tmp)\n"
+        "    $s.Arguments = [string]$u.args\n"
+        "    $s.Save()\n"
+        "    Copy-Item -LiteralPath $tmp -Destination $u.path -Force\n"
+        "  } finally {\n"
+        "    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue\n"
+        "  }\n"
         "}\n"
     )
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
-    kwargs = {'input': json.dumps(updates), 'text': True, 'encoding': 'utf-8', 'timeout': 15, 'check': True}
+    kwargs = {'input': json.dumps(updates, ensure_ascii=True), 'text': True, 'encoding': 'utf-8', 'timeout': 15, 'check': True}
     if os.name == 'nt':
         kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
     runner(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], **kwargs)
@@ -321,7 +453,7 @@ def merge_desktop_entry(text):
             prefix, rhs = match.group(1), match.group(2).rstrip()
             if '--remote-debugging-port' not in rhs:
                 field = re.search(r'(\s+%[fFuUdDnNickvm])', rhs)
-                flags = f'{DEBUG_PORT_FLAG} {DEBUG_ADDRESS_FLAG}'
+                flags = f'{DEBUG_PORT_FLAG} ${DEBUG_ADDRESS_FLAG}' if False else f'{DEBUG_PORT_FLAG} {DEBUG_ADDRESS_FLAG}'
                 if field:
                     rhs = rhs[:field.start()] + ' ' + flags + rhs[field.start():]
                 else:
@@ -632,7 +764,7 @@ def build_launch_command(executable, workspace=None, platform=None, use_open=Tru
     return [str(executable), *DEBUG_ARGS, *extra]
 
 
-def inspect_desktop_launch(platform=None, home=None, local=None, env=None):
+def inspect_desktop_launch(platform=None, home=None, local=None, env=None, known_folder_resolver=None):
     """Inspect whether user launch entry points supply the loopback CDP flags."""
     platform = platform or sys.platform
     home = Path(home) if home is not None else Path.home()
@@ -640,7 +772,7 @@ def inspect_desktop_launch(platform=None, home=None, local=None, env=None):
     if platform == 'win32':
         found = []
         all_ready = True
-        for lnk in _iter_lnk_files(_windows_shortcut_roots(home, env)):
+        for lnk in _iter_lnk_files(_windows_shortcut_roots(home, env, known_folder_resolver=known_folder_resolver)):
             info = parse_lnk(lnk)
             if not is_antigravity_desktop_shortcut(lnk, info):
                 continue
@@ -679,7 +811,7 @@ def inspect_desktop_launch(platform=None, home=None, local=None, env=None):
 
 def configure_desktop_launch(platform=None, home=None, local=None, env=None, managed=None,
                              shortcut_writer=write_windows_shortcut_args, system_desktop_dirs=None,
-                             app_asar=None, profile=None, system_app_dirs=None):
+                             app_asar=None, profile=None, system_app_dirs=None, known_folder_resolver=None):
     """Add loopback debugging flags to user-owned Antigravity Desktop entry points."""
     platform = platform or sys.platform
     home = Path(home) if home is not None else Path.home()
@@ -690,7 +822,7 @@ def configure_desktop_launch(platform=None, home=None, local=None, env=None, man
         tracked = dict(managed_state.get('windowsShortcuts') or {})
         updates = []
         entrypoints = []
-        for lnk in _iter_lnk_files(_windows_shortcut_roots(home, env)):
+        for lnk in _iter_lnk_files(_windows_shortcut_roots(home, env, known_folder_resolver=known_folder_resolver)):
             info = parse_lnk(lnk)
             if not is_antigravity_desktop_shortcut(lnk, info):
                 continue

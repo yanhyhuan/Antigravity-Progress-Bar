@@ -14,8 +14,12 @@ local `.db` or host summary are skipped, and settled zero-request `.db` files
 mark complete instead of entering exponential retry loops. New ordinary
 conversations are discovered on the next explicit pass. Unreadable candidates
 retain retry state and saved statistics. Repeated pages and stalled offsets stop
-immediately. The main panel sidecar and IDE collector processes also cap V8
-old-space growth with `--max-old-space-size=192`.
+immediately. Usage aggregation uses a persistent incremental SQLite index
+(`.usage-index-v1.sqlite`, including 120-day 24-hour hourly buckets capped by a
+1.5 MiB serialized budget) with bounded page cache (`2 MiB`) and O(1) V8 heap
+retention regardless of history length, paired with LRU caps on session/reader
+caches and soft-watermark backfill backpressure instead of a brittle fixed
+`--max-old-space-size` crash cap.
 
 Local discovery, candidates, retry state and trajectory summaries are capped.
 Checkpoint metadata is saved once per slice and limited to 4,096 entries with an

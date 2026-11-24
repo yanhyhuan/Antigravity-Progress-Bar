@@ -76,3 +76,28 @@ test('POSIX hub API selection requires the current same-user process listener',a
   assert.deepEqual(await client(row).discover(),{pid:20,port:8000,csrf:'test-only'});
  }
 });
+test('IDE 2.34+ reads daemon discovery csrfToken when --csrf_token is absent and verifies exact PID and port',async()=>{
+ const noCsrfHub={ProcessId:20,ParentProcessId:15,Name:'agy.exe',CommandLine:'"C:\\User Space\\agy.exe" --hub --hub-port=8000',Ports:[7777,8000]};
+ const okClient=new IdeClient({
+  profile:'fixture',debugPort:()=>9000,processes:async()=>noCsrfHub,logPorts:async()=>[],
+  daemonDir:'fixture-daemon',
+  daemonFiles:async()=>[
+   {pid:99,httpPort:8000,csrfToken:'foreign-pid'},
+   {pid:20,httpPort:7777,csrfToken:'wrong-port'},
+   {pid:20,httpPort:8000,csrfToken:'ide-daemon-token'},
+  ],
+  env:{ANTIGRAVITY_CSRF_TOKEN:'scoped-env-token'},
+ });
+ const value=await okClient.discover();
+ assert.deepEqual(value,{pid:20,port:8000,csrf:'ide-daemon-token'});
+ assert.equal(value.credentialSource,'daemon-file');
+
+ // Mismatched daemon records must not supply credentials.
+ const badClient=new IdeClient({
+  profile:'fixture',debugPort:()=>9000,processes:async()=>noCsrfHub,logPorts:async()=>[],
+  daemonDir:'fixture-daemon',
+  daemonFiles:async()=>[{pid:99,httpPort:8000,csrfToken:'foreign-pid'},{pid:20,httpPort:7777,csrfToken:'wrong-port'}],
+  env:{},
+ });
+ await assert.rejects(badClient.discover(),/credential unavailable/);
+});

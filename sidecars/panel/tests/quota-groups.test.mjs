@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {quotaMetrics} from '../metrics.mjs';
+import {quotaModelFamily,classifyQuotaGroupId} from '../usage.mjs';
 const createI18n=createRequire(import.meta.url)('../../../compat/i18n.cjs');
 const gemini={id:'gemini',name:'Gemini'},argon={id:'opaque-premium',name:'Gemini 4 Argon'},third={id:'3p',name:'Claude / GPT'};
 
@@ -14,7 +15,11 @@ test('quota labels and selection agree across IDs, display names and order in al
     assert.equal(ui.chooseQuotaGroup(groups,'Gemini 4 Argon').id,group.id);
     assert.equal(ui.chooseQuotaGroup(groups,'Gemini Flash').id,'gemini');
     assert.equal(ui.chooseQuotaGroup(groups,'Gemini 4 Hydrogen (XHigh)').id,'gemini');
+    assert.equal(ui.chooseQuotaGroup(groups,'Gemini 4 Neon (High)').id,'gemini');
+    assert.equal(ui.chooseQuotaGroup(groups,'Neon (High)').id,'gemini');
     assert.equal(ui.chooseQuotaGroup(groups,'Orchestrator (Carbon)').id,'gemini');
+    assert.equal(ui.chooseQuotaGroup(groups,'Orchestrator Claude Opus 5.5 (Max)').id,'3p');
+    assert.equal(ui.chooseQuotaGroup(groups,'Orchestrator GPT-OSS 120B').id,'3p');
     assert.equal(ui.chooseQuotaGroup(groups,'GPT-5').id,'3p');
     assert.equal(ui.chooseQuotaGroup(groups,'Claude Sonnet').id,'3p');
     assert.equal(ui.chooseQuotaGroup(groups,'Claude Sonnet 4.5').id,'3p');
@@ -24,6 +29,14 @@ test('quota labels and selection agree across IDs, display names and order in al
    }
   }
  }
+ assert.equal(quotaModelFamily('Orchestrator Claude Opus 5.5 (Max)'),'3p');
+ assert.equal(quotaModelFamily('Orchestrator GPT-OSS 120B'),'3p');
+ assert.equal(quotaModelFamily('Orchestrator Gemini 4 Neon (XHigh)'),'gemini');
+ assert.equal(quotaModelFamily('Orchestrator Gemini 4 Argon'),'gemini-argon');
+ assert.equal(quotaModelFamily('Orchestrator'),'gemini');
+ assert.equal(classifyQuotaGroupId([gemini,argon,third],'Orchestrator Claude Sonnet 4.6'),'3p');
+ assert.equal(classifyQuotaGroupId([gemini,argon,third],'Orchestrator Gemini 4 Argon'),'opaque-premium');
+ assert.equal(classifyQuotaGroupId([gemini,argon,third],'Orchestrator'),'gemini');
 });
 
 test('an opaque quota group from the real normalizer is selected using its display name',()=>{

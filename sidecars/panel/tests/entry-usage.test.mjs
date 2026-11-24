@@ -26,7 +26,7 @@ async function entryFixture(host,url,selection=false){
     'store.mjs':{MetricsStore:Store},'usage.mjs':{DesktopUsage:Usage,UsageLedger:class{}},
     'sdk.mjs':{loadSidecarSdk:async()=>({SidecarApp:App,Response:class{}})},
     'runtime-ui.mjs':{RuntimeUi:Ui,makeRendererSource:()=>''},
-    'platform.mjs':{agentExecutables:()=>[],platformPaths:()=>({data:'fixture',settings:'settings.json'})},
+    'platform.mjs':{agentExecutables:()=>[],isRemoteHeadlessHost:()=>false,platformPaths:()=>({data:'fixture',settings:'settings.json'})},
     'launch-config.mjs':{inspectHostArchive:async()=>({version:null,requiresDebugFlag:false}),inspectDesktopLaunch:async()=>({configured:false,supported:false,entrypoints:[]}),ensureDesktopLaunchConfig:async()=>({configured:false,repaired:false,supported:false,entrypoints:[]})},
     'preferences.mjs':{PreferencesStore:class{async snapshot(){return {};}}},
     'sidecar-owner.mjs':{SidecarOwner:Owner},'host-theme.mjs':{readHostTheme:async()=>({})},

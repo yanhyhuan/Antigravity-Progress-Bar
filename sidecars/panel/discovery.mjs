@@ -1,28 +1,39 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { open, readFile, readdir } from 'node:fs/promises';
+import { lstat, open, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createConnection } from 'node:net';
 import { performance } from 'node:perf_hooks';
 
 const exec = promisify(execFile);
 const languageServer = command => /(?:^|[\/\\])language_server(?:_(?:linux|macos|darwin)(?:_(?:x64|arm64))?)?(?:\.exe)?(?:\s|$)/.test(command);
+const DAEMON_DISCOVERY_FILE = /^(?:ls|hub)_[^/\\]+\.json$/i;
+
+export function isRemoteHubCommand(commandLine) {
+  const cmd = String(commandLine || '');
+  return /(?:^|\s)--workspace_id(?:=|\s+)["']?[^"'\s]*ssh\b/i.test(cmd)
+    || /[\/\\]\.antigravity-hub-server[\/\\]/i.test(cmd);
+}
 
 export function httpLogPorts(log) {
-  const ports=new Set();
-  for(const match of String(log||'').matchAll(/listening on (?:random|loopback) port at (\d+) for (?:local )?HTTP(?:\s|\(|$)/g)){
-    const port=Number(match[1]);if(port<1||port>65535)continue;
+  const ports = new Set();
+  for (const match of String(log || '').matchAll(/listening on (?:random|loopback) port at (\d+) for (?:local )?HTTP(?:\s|\(|$)/g)) {
+    const port = Number(match[1]);
+    if (port < 1 || port > 65535) continue;
     // Keep the most recent occurrence first without retaining complete logs.
-    ports.delete(port);ports.add(port);
+    ports.delete(port);
+    ports.add(port);
   }
   return [...ports].reverse();
 }
 
 export function httpsLogPorts(log) {
-  const ports=new Set();
-  for(const match of String(log||'').matchAll(/listening on (?:random|loopback) port at (\d+) for HTTPS(?:\s|\(|$)/g)){
-    const port=Number(match[1]);if(port<1||port>65535)continue;
-    ports.delete(port);ports.add(port);
+  const ports = new Set();
+  for (const match of String(log || '').matchAll(/listening on (?:random|loopback) port at (\d+) for (?:local )?HTTPS(?:\s|\(|$)/g)) {
+    const port = Number(match[1]);
+    if (port < 1 || port > 65535) continue;
+    ports.delete(port);
+    ports.add(port);
   }
   return [...ports].reverse();
 }
@@ -122,6 +133,88 @@ const endpoint = value => {
   return match ? {address:match[1],port:match[2]} : null;
 };
 const integer = value => typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+
+// Read Antigravity 2.34.0+ daemon discovery files (~/.gemini/antigravity/daemon/{ls,hub}_*.json).
+// Never follow symlinks, bound scanned entries and file sizes, and require same-UID ownership on POSIX.
+// Callers must still pair each record with a live PID and verified listening socket.
+export async function discoverDaemonFiles(daemonDir, {
+  list = readdir,
+  fileStat = lstat,
+  read = readFile,
+  uid = process.getuid?.(),
+  maxScan = 4096,
+  maxFiles = 256,
+  maxBytes = 16384,
+} = {}) {
+  if (!daemonDir || typeof daemonDir !== 'string') return [];
+  try {
+    const dirInfo = await fileStat(daemonDir);
+    if (dirInfo.isSymbolicLink?.() || !dirInfo.isDirectory?.()) return [];
+  } catch {
+    return [];
+  }
+  let entries;
+  try {
+    entries = await list(daemonDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const candidates = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const name = typeof entry === 'string' ? entry : entry?.name;
+    if (typeof name !== 'string' || !DAEMON_DISCOVERY_FILE.test(name)) continue;
+    if (typeof entry !== 'string' && (entry.isSymbolicLink?.() || (typeof entry.isFile === 'function' && !entry.isFile()))) continue;
+    candidates.push(name);
+    if (candidates.length >= maxScan) break;
+  }
+  if (!candidates.length) return [];
+  const statResults = [];
+  for (let i = 0; i < candidates.length; i += 64) {
+    const batch = await Promise.all(candidates.slice(i, i + 64).map(async name => {
+      const full = join(daemonDir, name);
+      try {
+        const info = await fileStat(full);
+        if (info.isSymbolicLink?.() || !info.isFile?.()) return null;
+        if (!(info.size > 0 && info.size <= maxBytes)) return null;
+        if (typeof uid === 'number' && typeof info.uid === 'number' && info.uid !== uid) return null;
+        return { name, full, mtimeMs: Number.isFinite(info.mtimeMs) ? info.mtimeMs : 0 };
+      } catch {
+        return null;
+      }
+    }));
+    for (const item of batch) if (item) statResults.push(item);
+  }
+  statResults.sort((a, b) => b.mtimeMs - a.mtimeMs || b.name.localeCompare(a.name));
+  const selected = statResults.slice(0, maxFiles);
+  const records = [];
+  for (let i = 0; i < selected.length; i += 32) {
+    const batch = await Promise.all(selected.slice(i, i + 32).map(async item => {
+      try {
+        const raw = await read(item.full, 'utf8');
+        if (typeof raw !== 'string' || raw.length === 0 || raw.length > maxBytes) return null;
+        const data = JSON.parse(raw.replace(/^\uFEFF/, ''));
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+        const pid = integer(data.pid);
+        if (!validPid(pid)) return null;
+        const rawHttp = integer(data.httpPort ?? data.http_port);
+        const rawHttps = integer(data.httpsPort ?? data.https_port);
+        const httpPort = validPort(rawHttp) ? rawHttp : null;
+        const httpsPort = validPort(rawHttps) ? rawHttps : null;
+        if (httpPort === null && httpsPort === null) return null;
+        const rawToken = data.csrfToken ?? data.csrf_token;
+        const csrfToken = typeof rawToken === 'string' ? rawToken.trim() : '';
+        if (!csrfToken || csrfToken.length > 512) return null;
+        const rawVer = data.lsVersion ?? data.ls_version;
+        const lsVersion = typeof rawVer === 'string' && rawVer.trim() ? rawVer.trim().slice(0, 64) : null;
+        return { pid, httpPort, httpsPort, csrfToken, lsVersion, file: item.name, modifiedAt: item.mtimeMs };
+      } catch {
+        return null;
+      }
+    }));
+    for (const rec of batch) if (rec) records.push(rec);
+  }
+  return records;
+}
 
 function netstatSnapshot(text) {
   const ports=new Map(),rejectedPids=new Set();

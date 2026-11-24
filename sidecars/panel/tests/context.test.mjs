@@ -109,6 +109,36 @@ test('equivalent model IDs normalize identically without changing versions or in
  assert.equal(modelContextReference('Claude Opus 5.5 (Max)')?.label,'1M');
  assert.equal(formatModelName('Gemini 3.8 Flash (XHigh)'),'Gemini 3.8 Flash (XHigh)');
  assert.equal(modelContextCapacity('Gemini 3.8 Flash (XHigh)'),1048576);
+ // Antigravity 2.35.0 model slugs and verified clientModelConfigs placeholders:
+ assert.equal(formatModelName('claude-opus-5-5-low'),'Claude Opus 5.5 (Low)');
+ assert.equal(formatModelName('claude-opus-5-5-medium'),'Claude Opus 5.5 (Medium)');
+ assert.equal(formatModelName('claude-opus-5-5-high'),'Claude Opus 5.5 (High)');
+ assert.equal(formatModelName('claude-sonnet-5-5-low'),'Claude Sonnet 5.5 (Low)');
+ assert.equal(formatModelName('claude-sonnet-5-5-medium'),'Claude Sonnet 5.5 (Medium)');
+ assert.equal(formatModelName('claude-sonnet-5-5-high'),'Claude Sonnet 5.5 (High)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M400'),'Claude Opus 5.5 (Low)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M402'),'Claude Opus 5.5 (High)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M405'),'Claude Sonnet 5.5 (High)');
+ assert.equal(modelContextReference('MODEL_PLACEHOLDER_M402')?.label,'1M');
+ assert.equal(modelContextReference('MODEL_PLACEHOLDER_M405')?.label,'1M');
+ assert.equal(formatModelName('gemini-4-neon-xhigh'),'Gemini 4 Neon (XHigh)');
+ assert.equal(formatModelName('gemini-4-carbon-high'),'Gemini 4 Carbon (High)');
+ assert.equal(formatModelName('gemini-4-argon-medium'),'Gemini 4 Argon (Medium)');
+ assert.equal(formatModelName('gemini-4-hydrogen-low'),'Gemini 4 Hydrogen (Low)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M535'),'Gemini 4 Neon (XHigh)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M427'),'Gemini 4 Carbon (High)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M417'),'Gemini 4 Argon (High)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M528'),'Gemini 4 Hydrogen (XHigh)');
+ assert.equal(modelContextReference('gemini-4-carbon-high'),null);
+ assert.equal(formatModelName('gemini-pro-orchestrator'),'Orchestrator (Carbon)');
+ assert.equal(formatModelName('gemini-pro-orchestrator-argon'),'Orchestrator (Argon)');
+ assert.equal(formatModelName('gemini-pro-orchestrator-neon'),'Orchestrator (Neon)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M667'),'Orchestrator (Carbon)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M681'),'Orchestrator (Argon)');
+ assert.equal(formatModelName('MODEL_PLACEHOLDER_M537'),'Orchestrator (Neon)');
+ assert.equal(modelContextReference('gemini-pro-orchestrator'),null);
+ assert.equal(formatModelName('gpt-oss-120b-maas'),'GPT-OSS 120B');
+ assert.equal(modelContextCapacity('gpt-oss-120b-maas'),131072);
 });
 test('unknown/family/specialized model names never inherit another model reference',()=>{
  for(const model of ['Gemini','gemini-3.8-flash-tts','gemini-3.8-flash-lite','Claude','claude-sonnet-4-5','claude-sonnet-4','claude-sonnet-5-5-custom','gpt-oss','gpt-oss-20b','MODEL_PLACEHOLDER_M317','MODEL_PLACEHOLDER_M421','user-gemini-3.8-flash-custom']){

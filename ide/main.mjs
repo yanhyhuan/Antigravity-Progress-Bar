@@ -27,10 +27,10 @@ store.onTrajectory=async(scope,id,raw,options={})=>{
 };
 store.onBackgroundResult=(scope,id,file,options)=>usage.ingestDisk(scope,id,file,options);
 const preferences=new PreferencesStore({file:join(data,'preferences.json')});
-const files=await Promise.all(['compat/i18n.cjs','compat/inline-widget.cjs','compat/theme.cjs','ide/surface.cjs','compat/usage-ui.cjs'].map(f=>readFile(join(root,f),'utf8')));
+const files=await Promise.all(['compat/i18n.cjs','compat/inline-widget.cjs','compat/theme.cjs','ide/surface.cjs','compat/usage-ui.cjs','compat/pricing.cjs'].map(f=>readFile(join(root,f),'utf8')));
 const extract=s=>s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'');
 if(!await ownership.claim())process.exit(0);
-const usageSource=`window.__agPulseUsageFactory=(${extract(files[4])});`;
+const usageSource=`window.__agPulsePricingFactory=(${extract(files[5])});window.__agPulseUsageFactory=(${extract(files[4])});`;
 const owner=ownership.token;
 const adapter=`window.__agPulseSurface=(${extract(files[3])})();`;
 const source=makeRendererSource(...files.slice(0,3),owner,ownership.startedAt,adapter+usageSource);
@@ -65,7 +65,7 @@ const snapshot=async input=>{
     }catch{value={connection:'offline',speed:null,groups:[],error:'IDE local API unavailable'};}
   }
   if(input.usageSync===true)void usage.sync(true);
-  return {...value,usage:await usage.snapshot({sync:input.usageSync===true,scope:prefs?.usageScope||'local',groups:value.groups}),enabled:true,preferences:prefs,theme};
+  return {...value,usage:await usage.snapshot({sync:input.usageSync===true,scope:prefs?.usageScope||'local',groups:value.groups,maxWaitMs:input.usageSync===true?0:350}).catch(()=>null),enabled:true,preferences:prefs,theme};
 };
 const ui=new RuntimeUi({profile,source,sourceForTarget:target=>target.ideWebview?webviewSource:source,owner,owns:()=>ownership.isOwner(),preferences,snapshot,dataDir:data,targetOrigin:target=>target.ideWebview?new URL(target.url).origin:'vscode-file://vscode-app',
   discover:async()=>{const result=await ideTargets(profile);debugPort=result.port;return result.targets;}});

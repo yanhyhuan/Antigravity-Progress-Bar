@@ -248,14 +248,98 @@ export function mergeDesktopEntry(text) {
   return out.join('\n') + '\n';
 }
 
-function windowsShortcutRoots({ home = homedir(), env = process.env } = {}) {
+const knownFoldersCache = new Map();
+const KNOWN_FOLDERS_OK_TTL_MS = 5 * 60 * 1000;
+const KNOWN_FOLDERS_ERR_TTL_MS = 60 * 1000;
+
+function expandWindowsEnv(value, env = {}) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const upper = new Map();
+  for (const [k, v] of Object.entries(env || {})) {
+    if (typeof v === 'string') upper.set(k.toUpperCase(), v);
+  }
+  const expanded = value.trim().replace(/%([^%]+)%/g, (match, name) => upper.get(name.toUpperCase()) ?? match);
+  if (!expanded || /%[^%]+%/.test(expanded)) return null;
+  if (process.platform !== 'win32' && expanded.startsWith('/')) return expanded.replace(/\\/g, '/');
+  return expanded;
+}
+
+function defaultResolveWindowsKnownFolders(home) {
+  const cacheKey = resolve(home).toLowerCase();
+  const cached = knownFoldersCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+  const script = "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); @{desktop=[Environment]::GetFolderPath('Desktop');programs=[Environment]::GetFolderPath('Programs')} | ConvertTo-Json -Compress";
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const promise = new Promise(resolvePromise => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+      { windowsHide: true, timeout: 6000, maxBuffer: 65536 }, (error, stdout) => {
+        if (error) {
+          knownFoldersCache.set(cacheKey, { expiresAt: Date.now() + KNOWN_FOLDERS_ERR_TTL_MS, promise: Promise.resolve({}) });
+          resolvePromise({});
+          return;
+        }
+        try {
+          const parsed = JSON.parse(String(stdout || '').replace(/^\uFEFF/, '').trim() || '{}');
+          const result = {
+            desktop: typeof parsed.desktop === 'string' && parsed.desktop.trim() ? parsed.desktop.trim() : null,
+            programs: typeof parsed.programs === 'string' && parsed.programs.trim() ? parsed.programs.trim() : null,
+          };
+          knownFoldersCache.set(cacheKey, { expiresAt: Date.now() + KNOWN_FOLDERS_OK_TTL_MS, promise: Promise.resolve(result) });
+          resolvePromise(result);
+        } catch {
+          knownFoldersCache.set(cacheKey, { expiresAt: Date.now() + KNOWN_FOLDERS_ERR_TTL_MS, promise: Promise.resolve({}) });
+          resolvePromise({});
+        }
+      });
+  });
+  knownFoldersCache.set(cacheKey, { expiresAt: Date.now() + KNOWN_FOLDERS_OK_TTL_MS, promise });
+  return promise;
+}
+
+async function windowsShortcutRoots({ home = homedir(), env = process.env, platform = process.platform, resolveKnownFolders } = {}) {
   const isRealHome = resolve(home) === resolve(homedir());
+  const explicitEnv = env !== process.env;
   const appdata = isRealHome && env.APPDATA ? env.APPDATA : join(home, 'AppData', 'Roaming');
-  return [
-    join(home, 'Desktop'),
-    join(appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
-    join(appdata, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'),
-  ];
+  let known = {};
+  if (typeof resolveKnownFolders === 'function') {
+    try { known = (await resolveKnownFolders({ home, env })) || {}; } catch { known = {}; }
+  } else if (isRealHome && platform === 'win32' && process.platform === 'win32') {
+    known = await defaultResolveWindowsKnownFolders(home);
+  }
+
+  const candidates = [];
+  const pushResolved = raw => {
+    if (typeof raw !== 'string' || !raw.trim()) return;
+    const expanded = expandWindowsEnv(raw, env);
+    if (expanded) candidates.push(expanded);
+  };
+  pushResolved(known?.desktop);
+  if (isRealHome || explicitEnv) {
+    for (const key of ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial']) {
+      if (typeof env?.[key] === 'string' && env[key].trim()) {
+        candidates.push(join(env[key].trim(), 'Desktop'));
+      }
+    }
+  }
+  candidates.push(join(home, 'Desktop'));
+
+  pushResolved(known?.programs);
+  candidates.push(join(appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs'));
+  candidates.push(join(appdata, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar'));
+
+  const roots = [];
+  const seen = new Set();
+  for (const dir of candidates) {
+    let norm = String(dir).trim().replace(/[\\/]+$/, '');
+    if (!norm) continue;
+    if (/^[a-zA-Z]:$/.test(norm)) norm += '\\';
+    const key = norm.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      roots.push(dir);
+    }
+  }
+  return roots;
 }
 
 async function iterLnkFiles(roots) {
@@ -479,11 +563,11 @@ async function isManagedMacosLauncher(bundle) {
   return false;
 }
 
-export async function inspectDesktopLaunch({ platform = process.platform, home = homedir(), env = process.env } = {}) {
+export async function inspectDesktopLaunch({ platform = process.platform, home = homedir(), env = process.env, resolveKnownFolders } = {}) {
   if (platform === 'win32') {
     const entrypoints = [];
     let allReady = true;
-    for (const lnk of await iterLnkFiles(windowsShortcutRoots({ home, env }))) {
+    for (const lnk of await iterLnkFiles(await windowsShortcutRoots({ home, env, platform, resolveKnownFolders }))) {
       try {
         const buf = await readFile(lnk);
         const info = parseLnkBuffer(buf);
@@ -528,24 +612,37 @@ export async function inspectDesktopLaunch({ platform = process.platform, home =
   return { configured: false, supported: false, entrypoints: [] };
 }
 
+export function toAsciiJson(value) {
+  return JSON.stringify(value).replace(/[^\x00-\x7f]/g, ch => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
 function defaultExecPowerShell(updates) {
   const script = [
     "$ErrorActionPreference = 'Stop'",
+    '[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)',
+    '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)',
     '$payload = [Console]::In.ReadToEnd() | ConvertFrom-Json',
     '$ws = New-Object -ComObject WScript.Shell',
     'foreach ($u in @($payload)) {',
     '  $item = Get-Item -LiteralPath $u.path',
     "  if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing linked shortcut' }",
-    '  $s = $ws.CreateShortcut($u.path)',
-    '  $s.Arguments = [string]$u.args',
-    '  $s.Save()',
+    '  $tmp = Join-Path ([IO.Path]::GetTempPath()) ("ag-lnk-" + [guid]::NewGuid().ToString("N") + ".lnk")',
+    '  try {',
+    '    Copy-Item -LiteralPath $u.path -Destination $tmp -Force',
+    '    $s = $ws.CreateShortcut($tmp)',
+    '    $s.Arguments = [string]$u.args',
+    '    $s.Save()',
+    '    Copy-Item -LiteralPath $tmp -Destination $u.path -Force',
+    '  } finally {',
+    '    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue',
+    '  }',
     '}',
   ].join('\n');
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   return new Promise((resolvePromise, rejectPromise) => {
     const child = execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
-      { windowsHide: true, timeout: 10000 }, error => (error ? rejectPromise(error) : resolvePromise()));
-    child.stdin.end(JSON.stringify(updates), 'utf8');
+      { windowsHide: true, timeout: 15000 }, error => (error ? rejectPromise(error) : resolvePromise()));
+    child.stdin.end(toAsciiJson(updates), 'ascii');
   });
 }
 
@@ -579,18 +676,19 @@ export async function ensureDesktopLaunchConfig({
   env = process.env,
   settingsPath,
   execPowerShell = defaultExecPowerShell,
+  resolveKnownFolders,
   systemDirs,
   appResources,
   profile,
   systemAppDirs,
 } = {}) {
-  const status = await inspectDesktopLaunch({ platform, home, env });
+  const status = await inspectDesktopLaunch({ platform, home, env, resolveKnownFolders });
   if (status.configured) return { ...status, repaired: false };
 
   if (platform === 'win32') {
     const updates = [];
     const entrypoints = [];
-    for (const lnk of await iterLnkFiles(windowsShortcutRoots({ home, env }))) {
+    for (const lnk of await iterLnkFiles(await windowsShortcutRoots({ home, env, platform, resolveKnownFolders }))) {
       try {
         const info = parseLnkBuffer(await readFile(lnk));
         if (!isAntigravityDesktopShortcut(lnk, info)) continue;

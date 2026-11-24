@@ -6,7 +6,7 @@
 
 Compact inline token throughput, cache hit rate, context window, and quota forecasts right beside the Antigravity model selector — enhanced with **CNY / USD cost analytics**, **24h hourly activity**, **3D Nailoong companion**, and **Windows task completion notifications**.
 
-[![Version 0.9.11](https://img.shields.io/badge/version-0.9.11-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
+[![Version 0.9.16](https://img.shields.io/badge/version-0.9.16-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
 [![Platforms](https://img.shields.io/badge/host-Windows%20%7C%20Linux%20%7C%20macOS-83d8b9?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
 [![Antigravity 2.34.0](https://img.shields.io/badge/Antigravity-2.34.0-c5a0ff?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-d4d9e6?style=flat-square&labelColor=252936)](LICENSE)
@@ -41,19 +41,19 @@ Compact inline token throughput, cache hit rate, context window, and quota forec
 
 ## Features
 
-- **Inline Status Strip & Smooth Speed Card** — Displays weighted session TPS, last-request TPS, peak speed, average TTFT, and model/tool durations without leaving the chat input. Switch between **Pixel Cat** and **Minimal** card styles, both rendered with a smooth monotone-spline waveform that follows your active light/dark theme and host font.
-- **Context Window & Smart Quota Forecasts** — Tracks host-reported context occupancy (`75%` warning / `90%` critical ring colors) alongside a recorded compaction badge (`🗜 N×`). Automatically matches **Gemini**, **Gemini (Argon)**, and **Claude / GPT** quota buckets (including custom `Orchestrator` planners and `(XHigh)` / `(Max)` effort variants in Antigravity `2.34.0`), showing 5-hour and weekly reset countdowns, linear depletion forecasts, and observed window token volumes.
-- **CNY (`¥`) / USD (`$`) Cost & 24h Usage Dashboard** — Aggregates local `usage-v1` history across **All local** traffic or the **Current account**. Includes **Daily**, **Weekly**, and **24-hour Hourly** activity views (retaining 120 days of hourly buckets), automatic 24h-cached exchange-rate and OpenRouter model pricing sync with built-in offline fallbacks, column sorting, interactive component toggles (`Uncached` / `Cache read` / `Output`), `Alt+Click` model isolation, `<0.1%` trace folding, and bar click drill-down.
-- **3D Nailoong Interactive Companion** — Built-in 3D video-atlas mascot perched on the composer rim across all models, featuring hover speech hints, click interactions, drag-down rim-cling, double-click backflips, coding-glasses + laptop animations while tasks are running, and right-click controls. Automatically steps aside on narrow panes, subagent boxes, or open modals.
+- **Inline Status Strip, Minimal Bar Collapse & Smooth Speed Card** — Displays weighted session TPS, last-request TPS, peak speed, average TTFT, and model/tool durations without leaving the chat input. Switch between **Pixel Cat** and **Minimal** speed card styles (both with a smooth monotone-spline waveform), or collapse the strip into an ultra-compact **Minimal bar** (`< ○ 47%`, compressing down to `24px` in narrow/subagent panes) with one click. Cold-start and transient reconnect states keep your last live numbers visible without disappearing.
+- **Context Window & Hybrid USD Cost-Space Quota Forecasts** — Tracks host-reported context occupancy (`75%` warning / `90%` critical ring colors) alongside a recorded compaction badge (`🗜 N×`). Automatically matches **Gemini**, **Gemini (Argon)**, and **Claude / GPT** quota buckets (accurately routing cross-vendor `Orchestrator` sub-planners, `Neon` codenames, and `(XHigh)` / `(Max)` effort variants in Antigravity `2.34.0+`), showing 5-hour and weekly reset countdowns, linear depletion forecasts, and hybrid Bayesian full-capacity estimates calibrated in both token and official API USD cost space.
+- **CNY (`¥`) / USD (`$`) Cost & 24h Usage Dashboard** — Backed by a persistent incremental SQLite index (`.usage-index-v1.sqlite`) for instant O(1)-memory summaries across **All local** traffic or the **Current account**. Includes **Daily**, **Weekly**, and **24-hour Hourly** colored stacked bar views (120 days of hourly buckets), automatic 24h-cached exchange-rate and OpenRouter model pricing sync with offline fallbacks, weekly quota USD/CNY full-capacity KPI card (`≈$...USD`), automatic model thinking-tier merging with hover per-tier breakdown tooltips, `K/M/B/T` compact table formatting, column sorting, component toggles (`Uncached` / `Cache read` / `Output`), `Alt+Click` model isolation, `<0.1%` trace folding, and bar click drill-down.
+- **3D Nailoong Interactive Companion** — Built-in 3D video-atlas mascot perched on the composer rim across all models, featuring hover speech hints, click interactions, drag-down rim-cling, double-click backflips, coding-glasses + laptop animations while tasks are running, and right-click controls. Automatically steps aside for open detail cards, narrow panes, subagent boxes, or modals.
 - **Windows Long-Task Completion Alerts** — Bundled `Stop` hook sends a native Windows toast notification and plays a sound/voice alert when long-running turns finish (default `≥ 30s`) or stop on error, ignoring quick Q&A turns and manual cancellations.
-- **Subagent Aggregation & Oversized Sessions** — Sums token and cache usage across delegated subagents while keeping speed and context scoped to the active composer. Oversized trajectories stream through a bounded background SQLite worker without blocking live refreshes.
+- **Antigravity `2.34.0+`, Remote SSH/WSL Hub & Oversized Sessions** — Supports `2.34.0+` daemon discovery (`~/.gemini/antigravity/daemon/`), headless Remote SSH/WSL hubs, `RPC_RESTRICTED` HTTP `403` resilience with `transcript.jsonl` streaming fallback, and delegated subagent token aggregation. Oversized trajectories stream through a bounded background SQLite worker without blocking live refreshes.
 - **Built-in UI Languages** — Switch dashboard labels anytime between **English**, **简体中文**, and **繁體中文** at the bottom of the Context card or in the Usage Dashboard header.
 
 ---
 
 ## Install
 
-Supported on **Windows, Linux, and macOS** with **Antigravity Desktop 2.21.1 – 2.34.0** and **Python 3.10+**. Zero third-party `pip` or `npm` dependencies are required; the collector runs on Antigravity's bundled Node.js runtime.
+Supported on **Windows, Linux, and macOS** with **Antigravity Desktop 2.21.1 – 2.34.0+** and **Python 3.10+**. Zero third-party `pip` or `npm` dependencies are required; the collector runs on Antigravity's bundled Node.js runtime.
 
 ### Option 1: Antigravity Custom Plugin Marketplace
 
@@ -91,8 +91,8 @@ On Linux or macOS, run `python3 manage.py install` (or `sh install.sh`). Never r
 
 After installing, **fully quit and reopen Antigravity** from your shortcut or launcher so the new runtime loads.
 
-> **How inline mounting works on Antigravity 2.33.0+ & 2.34.0:**  
-> Antigravity has no public DOM slot beside the model selector, so the sidecar attaches the Shadow DOM strip over the host's loopback CDP port (`127.0.0.1`) and reads local metrics via the official Sidecar SDK loopback environment (`ANTIGRAVITY_LS_ADDRESS` / `ANTIGRAVITY_CSRF_TOKEN`) without modifying `resources/app.asar`. Starting with `2.33.0`, remote debugging is opt-in: `manage.py install` and the active sidecar automatically configure user-owned Windows `.lnk` shortcuts, Linux `.desktop` entries, and a lightweight macOS launcher at `~/Applications/Antigravity (Dashboard).app` with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`.
+> **How inline mounting works on Antigravity 2.33.0+ & 2.34.0+:**  
+> Antigravity has no public DOM slot beside the model selector, so the sidecar attaches the Shadow DOM strip over the host's loopback CDP port (`127.0.0.1`) and reads local metrics via the official Sidecar SDK loopback environment (`ANTIGRAVITY_LS_ADDRESS` / `ANTIGRAVITY_CSRF_TOKEN`) and `2.34.0+` daemon files without modifying `resources/app.asar`. Starting with `2.33.0`, remote debugging is opt-in: `manage.py install` and the active sidecar automatically configure user-owned Windows `.lnk` shortcuts (including redirected Known Folders, `OneDrive*\Desktop`, `AntigravityLauncher.exe` proxy shortcuts, and non-ASCII/Chinese paths), Linux `.desktop` entries, and a lightweight macOS launcher at `~/Applications/Antigravity (Dashboard).app` with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`.
 
 ---
 
@@ -110,11 +110,13 @@ Run from the repository directory (`python3` on Linux/macOS):
 | --- | --- | --- |
 | Install / Update | `python manage.py install` | Install runtime files, configure user launch entry points, and keep saved data |
 | Launch Host | `python manage.py launch` | Launch Antigravity Desktop with loopback debugging flags (`--restart` supported on macOS) |
-| Check Status | `python manage.py status` | Inspect install state, host version (`2.34.0`), launch shortcut config, and attachment health |
+| Check Status | `python manage.py status` | Inspect install state, host version (`2.34.0+`), launch shortcut config, and attachment health |
 | Disable | `python manage.py disable` | Hide the inline strip on the next poll without uninstalling |
 | Enable | `python manage.py enable` | Re-enable the plugin and restore the strip |
 | Panel Only | `python manage.py install --panel-only` | Run only the native Side Panel extension without inline composer attachment |
 | Uninstall | `python manage.py uninstall` | Remove plugin runtime and managed launch flags while keeping historical data |
+| Install `agy` CLI | `python manage.py install-cli` | Install `agy` status line & local `#usage` hook (`--no-hook` to skip hook) |
+| `agy` CLI Report | `python manage.py usage-cli` | Print local CLI usage report in terminal (`--watch` for live refresh) |
 
 To open the fallback **Side Panel** inside Antigravity, toggle the right auxiliary pane and select **`+` → Extensions → Antigravity Progress Bar**.
 
@@ -141,18 +143,20 @@ On Windows, the bundled `Stop` hook notifies you when a turn finishes after `min
 
 ### Antigravity Standalone IDE (VSIX)
 
-Download `antigrative-dashboard-ide-0.9.11.vsix` from [Releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases) and select **Install from VSIX…** in the Antigravity IDE Extensions view. Fully quit the IDE and start it with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`. See [ide/README.md](ide/README.md) for full setup and rollback details.
+Download `antigrative-dashboard-ide-0.9.16.vsix` from [Releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases) and select **Install from VSIX…** in the Antigravity IDE Extensions view. Fully quit the IDE and start it with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`. See [ide/README.md](ide/README.md) for full setup and rollback details.
 
-### Antigravity CLI (`agy`) Status Line
+### Antigravity CLI (`agy`) Status Line & `#usage` Hook
 
-Displays context occupancy, cached-read tokens, status, and color-coded quota bars in the official `agy` CLI `statusLine`:
+Displays context occupancy, conversation tokens (`↑`/`↓`), cache hit rate, estimated generation speed (`≈ t/s`), cost, grouped quotas (Gemini, Claude/GPT, Argon weekly) with reset countdowns, and a live `Turn` / `Last turn` summary row in the official `agy` CLI `statusLine` — supporting `en` / `zh-CN` / `zh-TW`, narrow 40-column Termux screens, fast Windows `.cmd` launchers, and automatic ASCII glyph fallback on legacy Windows consoles. Inside `agy`, send `#usage` (`#u`, `#用量`, `##`) for instant local usage details without calling the model:
 
 ```powershell
 node cli/statusline.mjs --preview
+node cli/statusline.mjs --doctor
 python manage.py install-cli
+python manage.py usage-cli
 ```
 
-Requires Node.js 20+. See [docs/CLI.md](docs/CLI.md) for options and model coverage.
+Requires Node.js 20+. See [docs/CLI.md](docs/CLI.md) for options (`--no-hook`, `--no-ledger`, `--ascii`), local hashed ledger details, and model coverage.
 
 ![Antigravity CLI status line](docs/assets/cli-conversation.png?v=0.8.4-cli-1)
 
@@ -166,10 +170,10 @@ Requires Node.js 20+. See [docs/CLI.md](docs/CLI.md) for options and model cover
 | **TTFT / Model / Tool Time** | Average time to first token; cumulative model time (`TTFT + stream`); merged non-overlapping tool execution intervals |
 | **Cache Hit Rate** | `cacheReadTokens ÷ (uncachedInput + cacheRead + cacheWrite)`, token-weighted across validated requests |
 | **Context Window** | Latest request-start `estimatedTokensUsed / maxContextTokens` reported by the host ([docs/CONTEXT_LIMITS.md](docs/CONTEXT_LIMITS.md)) |
-| **5h / Weekly Quotas** | Live account `remainingFraction` and `resetTime`, paired with linear pace projections and local window token observations |
-| **Estimated Cost** | Local token counts × OpenRouter model pricing (`prompt`, `completion`, `cacheRead`, `cacheWrite`), converted to CNY (`¥`) in Chinese locales or USD (`$`) in English |
+| **5h / Weekly Quotas** | Live account `remainingFraction` and `resetTime`, paired with linear pace projections and hybrid token + USD cost-space capacity estimates |
+| **Estimated Cost** | Local token counts × OpenRouter model pricing (`prompt`, `completion`, `cacheRead`, `cacheWrite`), converted to CNY (`¥`) in Chinese locales or USD (`$`) in English; weekly quota full-capacity equivalence uses official API USD list prices (`compat/pricing.cjs`) |
 
-**Local-only storage:** All RPC calls stay strictly on `127.0.0.1` loopback. Per-conversation snapshots (`history-v1`) and aggregated daily/hourly ledgers (`usage-v1`) live under `~/.gemini/antigravity/sidecar_data/antigravity-pulse/panel/data/` and store only timestamps, model names, hashed scopes, and numeric token counters — **never** prompts, replies, conversation titles, emails, or credentials. Pricing sync fetches only public model rates from `openrouter.ai` and `open.er-api.com` once every 24 hours without sending any user or usage data, falling back cleanly offline. See [docs/USAGE.md](docs/USAGE.md), [docs/LONG_CONVERSATIONS.md](docs/LONG_CONVERSATIONS.md), and [docs/ROBUSTNESS.md](docs/ROBUSTNESS.md).
+**Local-only storage:** All RPC calls stay strictly on `127.0.0.1` loopback. Per-conversation snapshots (`history-v1`) and incremental SQLite + JSON daily/hourly ledgers (`usage-v1`) live under `~/.gemini/antigravity/sidecar_data/antigravity-pulse/panel/data/` and store only timestamps, model names, hashed scopes, and numeric token counters — **never** prompts, replies, conversation titles, emails, or credentials. Pricing sync fetches only public model rates from `openrouter.ai` and `open.er-api.com` once every 24 hours without sending any user or usage data, falling back cleanly offline. See [docs/USAGE.md](docs/USAGE.md), [docs/LONG_CONVERSATIONS.md](docs/LONG_CONVERSATIONS.md), and [docs/ROBUSTNESS.md](docs/ROBUSTNESS.md).
 
 ---
 
@@ -189,9 +193,9 @@ No model response has completed in that conversation yet. Rather than carrying o
 
 </details>
 
-<details><summary><strong>How do compact windows behave?</strong></summary>
+<details><summary><strong>How do compact windows and Minimal Bar mode behave?</strong></summary>
 
-When composer width tightens, full text counters smoothly collapse into three clickable icons (Speed, Cache, Context) and hide completely only if even the icons would collide with host controls, restoring automatically when widened.
+Click the chevron on the strip (or choose **Minimal** at the bottom of the Context card) to collapse the strip into a compact `< ○ 47%` pill at any time. In Full mode, when composer width tightens, text counters smoothly collapse into three clickable icons (Speed, Cache, Context) and hide only if even the icons (`24px` in Minimal mode) would collide with host controls, restoring automatically when widened.
 
 </details>
 
@@ -209,7 +213,7 @@ python tools/sync-marketplace.py
 python tools/publish-release.py
 ```
 
-Optional README asset rendering uses headless Edge/Chromium via `node tools/render-readme-assets.mjs`. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [COMPATIBILITY.md](COMPATIBILITY.md), [docs/UPDATES.md](docs/UPDATES.md), and [CHANGELOG.md](CHANGELOG.md).
+Optional README asset rendering uses headless Edge/Chromium via `node tools/render-readme-assets.mjs` (and interactive CLI HTML preview via `node tools/preview-cli.mjs`). See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [COMPATIBILITY.md](COMPATIBILITY.md), [docs/UPDATES.md](docs/UPDATES.md), and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

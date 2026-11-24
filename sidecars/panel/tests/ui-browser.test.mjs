@@ -37,6 +37,7 @@ const EDGE_EXE = findEdge();
 async function launchBrowser(userDataDir, initialUrl) {
   const child = spawn(EDGE_EXE, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
     '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`, initialUrl,
   ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
   child.unref();
@@ -96,8 +97,8 @@ test('font sync, scope switching and quota window reference render end-to-end in
   let child = null, cdp = null, server = null;
   try {
 
-  const [i18nSrc, themeSrc, usageSrc, updateSrc, widgetSrc, surfaceSrc, stylesCss, formatMjs] = await Promise.all([
-    read('compat/i18n.cjs'), read('compat/theme.cjs'), read('compat/usage-ui.cjs'),
+  const [i18nSrc, themeSrc, pricingSrc, usageSrc, updateSrc, widgetSrc, surfaceSrc, stylesCss, formatMjs] = await Promise.all([
+    read('compat/i18n.cjs'), read('compat/theme.cjs'), read('compat/pricing.cjs'), read('compat/usage-ui.cjs'),
     read('compat/update-ui.cjs'), read('compat/inline-widget.cjs'), read('ide/surface.cjs'),
     read('sidecars/panel/styles.css'), read('sidecars/panel/format.mjs'),
   ]);
@@ -105,17 +106,20 @@ test('font sync, scope switching and quota window reference render end-to-end in
   const id = '11111111-1111-1111-1111-111111111111';
   let prefs = { language: 'zh-CN', languageGuideDismissed: true, usageGuideDismissed: true, usageScope: 'local', revision: 1 };
   let panelTheme = { fontFamily: "'Fira Code'", mode: 'dark', dark: { background: '#1e1e1e' } };
-  let signedIn = true, slowFullPoll = false, stressModels = false, billionSpeed = false, usageOnlyCalls = 0, integrationState = null, compactionMarkers = 0, quotaErrMsg = null;
+  let signedIn = true, slowFullPoll = false, stressModels = false, billionSpeed = false, usageOnlyCalls = 0, integrationState = null;
   const reset5h = new Date(Date.now() + 3 * 3600000).toISOString();
   const resetWk = new Date(Date.now() + 5 * 86400000).toISOString();
   const stressModelList = [
-    'gemini-4-hydrogen-orchestrator', 'orchestrator-carbon', 'gemini-4-hydrogen-xhigh',
+    'gemini-4-hydrogen-orchestrator', 'orchestrator-carbon', 'gemini-pro-orchestrator', 'gemini-4-hydrogen-xhigh',
     'gemini-4-carbon-high', 'gemini-4-carbon-medium', 'gemini-4-argon-high',
-    'gemini-4-argon-medium', 'gemini-3.8-flash-high', 'gemini-3.8-flash-medium',
-    'claude-opus-5.5-medium', 'gemini-flash', 'orchestrator-argon',
+    'gemini-4-argon-medium', 'gemini-pro-orchestrator-argon', 'gemini-3.8-flash-high', 'gemini-3.8-flash-medium',
+    'claude-opus-5.5-medium', 'claude-opus-5-5-high', 'claude-sonnet-5-5-high', 'claude-sonnet-5-5-medium',
+    'gemini-flash', 'orchestrator-argon', 'gemini-pro-orchestrator-neon',
     'gemini-3.8-flash', 'gemini-3.8-flash-tiered', 'gpt-5.4-high', 'claude-sonnet-4.6',
-    'claude-opus-4.5', 'gemini-3.5-pro', 'gemini-3.5-flash', 'gpt-5.4-mini',
-    'o3-pro', 'deepseek-r1',
+    'Claude Sonnet 4.6 (Thinking)', 'Gemini 4 Neon (High)', 'Gemini 4 Neon (XHigh)',
+    'Orchestrator (Neon)', 'GPT-OSS 120B (Medium)', 'claude-opus-4.5', 'gemini-3.5-pro',
+    'gemini-3.5-flash', 'gpt-5.4-mini', 'o3-pro', 'claude-haiku-4.5', 'gemini-2.5-pro',
+    'deepseek-r1', 'qwen-3-coder', 'llama-4-maverick',
   ];
   const usageData = (overrideScope = null) => {
     const scope = overrideScope === 'account' || overrideScope === 'local' ? overrideScope : prefs.usageScope;
@@ -171,9 +175,17 @@ test('font sync, scope switching and quota window reference render end-to-end in
       },
     };
   };
-  const metricsPayload = (overrideScope = null) => ({
-    connection: quotaErrMsg ? 'stale' : 'live',
-    ...(quotaErrMsg ? { error: quotaErrMsg } : {}),
+  let staleError = null;
+  let transientOffline = false;
+  const metricsPayload = (overrideScope = null) => (transientOffline ? {
+    connection: 'offline',
+    error: '等待 Antigrative Dashboard 重新连接',
+    speed: null,
+    groups: [],
+    transient: true,
+  } : {
+    connection: staleError ? 'stale' : 'live',
+    ...(staleError ? { error: staleError } : {}),
     theme: panelTheme,
     preferences: prefs,
     serverTime: new Date().toISOString(),
@@ -183,7 +195,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
     ...(integrationState ? { integration: integrationState } : {}),
     speed: {
       ...trajectoryMetrics({ trajectory: { cascadeId: id, steps: [{ type: 'USER_INPUT' }], generatorMetadata: [{ chatModel: { modelDisplayName: 'Gemini 4 Hydrogen (XHigh)', chatStartMetadata: { contextWindowMetadata: { estimatedTokensUsed: 100000, maxContextTokens: 512000 } }, usage: billionSpeed ? { messageId: 'm2', inputTokens: '80000000', cacheReadTokens: '1150000000', outputTokens: '4567890', responseOutputTokens: '4000000', apiProvider: 'API_PROVIDER_GOOGLE_GEMINI' } : { messageId: 'm1', inputTokens: '5384106', cacheReadTokens: '55937971', outputTokens: '473719', responseOutputTokens: '400000', apiProvider: 'API_PROVIDER_GOOGLE_GEMINI' }, streamingDuration: '2s' } }] } }),
-      ...(compactionMarkers > 0 ? { transcriptStats: { status: 'ready', compactionMarkers } } : {}),
+      transcriptStats: { version: 1, status: 'ready', complete: true, userTokens: 100, assistantTokens: 200, toolTokens: 50, systemTokens: 10, totalTokens: 360, matchedSteps: 1, compactionMarkers: 2, imageSteps: 0 },
     },
   });
   const inlineHtml = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -203,12 +215,13 @@ test('font sync, scope switching and quota window reference render end-to-end in
       },
       getPreferences: async () => (await fetch('/api/preferences')).json(),
       setPreferences: async input => (await fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })).json(),
-      updatePlugin: async () => ({ state: 'current', currentVersion: '0.8.20', latestVersion: '0.8.20' }),
+      updatePlugin: async () => ({ state: 'current', currentVersion: '0.9.16', latestVersion: '0.9.16' }),
       report: () => {},
     };
     window.__agPulseTestSurface = (${extract(surfaceSrc)})();
     window.__agPulseI18nFactory = (${extract(i18nSrc)});
     window.__agPulseThemeFactory = (${extract(themeSrc)});
+    window.__agPulsePricingFactory = (${extract(pricingSrc)});
     window.__agPulseUsageFactory = (${extract(usageSrc)});
     window.__agPulseUpdateFactory = (${extract(updateSrc)});
     (${extract(widgetSrc)})();
@@ -281,6 +294,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
   assert.equal(quotaText.fiveHidden, false);
   assert.equal(quotaText.fiveVal, '81.1M toks (约 644.2M 满额)');
   assert.equal(quotaText.weekVal, '129.9M toks (约 216.2M 满额)');
+  assert.equal(await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('context-compaction-pill').textContent`), '🗜 2 次');
 
   // Cache card compact breakdown with exact title tooltips + zero horizontal ellipsis
   const cacheCard = await evalJs(`() => {
@@ -445,7 +459,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
   }`, 'local scope recovers while signed out');
   await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot.getElementById('close').click()`);
 
-  // Verify IDE setMarkup allowlist & compact sticky-header Usage Details layout with 16 models at 1280x800
+  // Verify IDE setMarkup allowlist & compact sticky-header Usage Details layout with 18 merged models at 1280x800
   signedIn = true;
   stressModels = true;
   await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
@@ -457,12 +471,12 @@ test('font sync, scope switching and quota window reference render end-to-end in
   await waitUntil(`() => {
     const ud = document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard');
     return ud?.open === true && ud.firstElementChild.shadowRoot.getElementById('usage-waiting').hidden === true;
-  }`, 'reopened usage dashboard for 16-model layout verification');
+  }`, 'reopened usage dashboard for 18-model layout verification');
   await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot.getElementById('refresh').click()`);
   await waitUntil(`() => {
     const vs = document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot;
     return vs.querySelector('#totals .value')?.textContent !== '33KToken';
-  }`, '16-model totals loaded', 20000);
+  }`, '18-model totals loaded', 20000);
 
   // Also prove ide/surface setMarkup accepts the exact static template in compat/usage-ui.cjs
   const pageTemplateMatch = usageSrc.match(/setMarkup\(page,`([^`]*)`\)/);
@@ -480,11 +494,88 @@ test('font sync, scope switching and quota window reference render end-to-end in
     return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
   }`);
 
+  const expectedMergedStressCount = 21;
   await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot.getElementById('details-tab').click()`);
   await waitUntil(`() => {
     const vs = document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot;
-    return vs.getElementById('details').hidden === false && vs.querySelectorAll('#legend button').length === ${stressModelList.length} && vs.querySelectorAll('#table-body tr').length === ${stressModelList.length};
-  }`, 'details tab with 22 model rows visible');
+    return vs.getElementById('details').hidden === false && vs.querySelectorAll('#legend button[data-model]').length === ${expectedMergedStressCount} && vs.querySelectorAll('#table-body tr').length === ${expectedMergedStressCount};
+  }`, 'details tab with merged thinking-tier model rows visible');
+
+  // Verify thinking tiers merge across legend/chart/table without merging distinct variants/roles,
+  // and hovering a multi-tier table row shows the lightweight tier breakdown tooltip.
+  const tierMergeCheck = await evalJs(`() => {
+    const vs = document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot;
+    const legendLabels = [...vs.querySelectorAll('#legend button .legend-name')].map(n => n.textContent.trim());
+    const flashRow = vs.querySelector('#table-body tr[data-model="gemini 3.8 flash"]');
+    const sonnetRow = vs.querySelector('#table-body tr[data-model="claude sonnet 4.6"]');
+    const gptRow = vs.querySelector('#table-body tr[data-model="gpt 5.4"]');
+    const hydrogenRow = vs.querySelector('#table-body tr[data-model="gemini 4 hydrogen"]');
+    const deepseekRow = vs.querySelector('#table-body tr[data-model="deepseek r1"]');
+    const tableHeaders = [...vs.querySelectorAll('#table-head th')].map(n => n.firstElementChild?.textContent?.trim() || n.textContent.trim());
+    flashRow.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true, clientX: 260 }));
+    const tip = vs.getElementById('tip');
+    const flashTip = {
+      hidden: tip.hidden,
+      title: tip.querySelector('.tip-title')?.textContent || '',
+      tiers: [...tip.querySelectorAll('.tip-model')].map(n => n.textContent.trim()),
+    };
+    flashRow.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    const hiddenAfterLeave = tip.hidden;
+    sonnetRow.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true, clientX: 260 }));
+    const sonnetTip = {
+      hidden: tip.hidden,
+      title: tip.querySelector('.tip-title')?.textContent || '',
+      tiers: [...tip.querySelectorAll('.tip-model')].map(n => n.textContent.trim()),
+    };
+    sonnetRow.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    gptRow.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true, clientX: 260 }));
+    const singleTierTipHidden = tip.hidden;
+    gptRow.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    hydrogenRow.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true, clientX: 260 }));
+    const hydrogenTip = {
+      hidden: tip.hidden,
+      title: tip.querySelector('.tip-title')?.textContent || '',
+      tiers: [...tip.querySelectorAll('.tip-model')].map(n => n.textContent.trim()),
+    };
+    hydrogenRow.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    return {
+      legendLabels,
+      tableHeaders,
+      totalMetrics: [...vs.querySelectorAll('#totals .metric')].map(m => ({ label: m.querySelector('label')?.textContent?.trim(), value: m.querySelector('.value')?.textContent?.trim() })),
+      flashTotal: flashRow?.children[1]?.textContent || '',
+      flashCost: flashRow?.querySelector('.col-cost')?.textContent || '',
+      deepseekCost: deepseekRow?.querySelector('.col-cost')?.textContent || '',
+      flashTip,
+      sonnetTip,
+      hydrogenTip,
+      hiddenAfterLeave,
+      singleTierTipHidden,
+    };
+  }`);
+  assert.deepEqual(tierMergeCheck.tableHeaders, ['模型', '总 Token', '未缓存输入', '缓存读取', '缓存写入', '输出', '成本']);
+  assert.equal(tierMergeCheck.totalMetrics.length, 5, 'Overview strip should render 5 KPI cards including est. weekly quota USD');
+  assert.ok(/^≈\$[\d,.]+K?USD$/.test(tierMergeCheck.totalMetrics[4].value), 'Predicted weekly quota card should show ≈ USD from quotaWindows: ' + JSON.stringify(tierMergeCheck.totalMetrics[4]));
+  assert.ok(/^¥[\d,]+\.\d{2}$/.test(tierMergeCheck.flashCost), 'Priced model should show CNY estimate in zh-CN: ' + tierMergeCheck.flashCost);
+  assert.equal(tierMergeCheck.deepseekCost, '—', 'Unpriced model should show em-dash');
+  assert.ok(tierMergeCheck.legendLabels.includes('Gemini 4 Carbon'), 'Carbon high+medium+orchestrator+gemini-pro-orchestrator should merge into Gemini 4 Carbon');
+  assert.ok(tierMergeCheck.legendLabels.includes('Gemini 4 Neon'), 'Neon (High)+(XHigh)+Orchestrator (Neon)+gemini-pro-orchestrator-neon should merge into Gemini 4 Neon');
+  assert.ok(tierMergeCheck.legendLabels.includes('Gemini 4 Hydrogen'), 'Hydrogen xhigh+orchestrator should merge into Gemini 4 Hydrogen');
+  assert.ok(tierMergeCheck.legendLabels.includes('Gemini 4 Argon'), 'Argon high+medium+orchestrator+gemini-pro-orchestrator-argon should merge into Gemini 4 Argon');
+  assert.ok(tierMergeCheck.legendLabels.includes('Claude Opus 5.5') && tierMergeCheck.legendLabels.includes('Claude Sonnet 5.5'), '2.35.0 claude-opus-5-5-* and claude-sonnet-5-5-* slugs should merge into Claude Opus 5.5 and Claude Sonnet 5.5');
+  assert.equal(tierMergeCheck.legendLabels.some(l => /orchestrator|gemini pro$/i.test(l)), false, 'Orchestrator variants including gemini-pro-orchestrator* should merge into their corresponding Gemini 4 models');
+  assert.equal(tierMergeCheck.hydrogenTip.hidden, false, 'Merged Hydrogen + Orchestrator row should show mode/tier breakdown tooltip');
+  assert.ok(tierMergeCheck.hydrogenTip.title.includes('Gemini 4 Hydrogen'), 'Tooltip should display full model name: ' + tierMergeCheck.hydrogenTip.title);
+  assert.ok(tierMergeCheck.hydrogenTip.tiers.some(t => t.startsWith('Orchestrator')) && tierMergeCheck.hydrogenTip.tiers.some(t => t.startsWith('XHigh')), 'Hydrogen tooltip should include Orchestrator and XHigh: ' + JSON.stringify(tierMergeCheck.hydrogenTip.tiers));
+  assert.ok(tierMergeCheck.legendLabels.includes('GPT-OSS 120B'), 'Hyphenated uppercase model base must be preserved');
+  assert.ok(tierMergeCheck.legendLabels.includes('GPT 5.4') && tierMergeCheck.legendLabels.includes('GPT 5.4 Mini'), 'Mini variant must stay distinct from GPT 5.4');
+  assert.equal(tierMergeCheck.flashTip.hidden, false, 'Multi-tier row hover should show tier breakdown tooltip');
+  assert.ok(tierMergeCheck.flashTip.title.includes('Gemini 3.8 Flash') && tierMergeCheck.flashTip.title.includes('档位分布'), 'Tooltip should show model name and tier heading: ' + tierMergeCheck.flashTip.title);
+  assert.equal(tierMergeCheck.flashTip.tiers.length, 4, 'Gemini 3.8 Flash should list all 4 constituent tiers (High, Medium, Default, Tiered)');
+  assert.ok(tierMergeCheck.flashTip.tiers.some(t => t.startsWith('High')) && tierMergeCheck.flashTip.tiers.some(t => t.startsWith('Medium')) && tierMergeCheck.flashTip.tiers.some(t => t.startsWith('默认')) && tierMergeCheck.flashTip.tiers.some(t => t.startsWith('Tiered')), 'Unexpected tier rows: ' + JSON.stringify(tierMergeCheck.flashTip.tiers));
+  assert.equal(tierMergeCheck.sonnetTip.hidden, false, 'Mixed slug + parenthesized tier should merge into Claude Sonnet 4.6 with 2 tiers');
+  assert.equal(tierMergeCheck.sonnetTip.tiers.length, 2, 'Claude Sonnet 4.6 should show Default + Thinking tiers');
+  assert.equal(tierMergeCheck.hiddenAfterLeave, true, 'Leaving multi-tier row should hide tooltip');
+  assert.equal(tierMergeCheck.singleTierTipHidden, true, 'Single-tier row hover should keep tooltip hidden');
 
   const detailsMetrics = await evalJs(`() => {
     const ud = document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard');
@@ -493,12 +584,12 @@ test('font sync, scope switching and quota window reference render end-to-end in
     const head = vs.querySelector('.page-head').getBoundingClientRect();
     const body = vs.getElementById('page-body');
     const br = body.getBoundingClientRect();
-    const chart = vs.querySelector('.chart').getBoundingClientRect();
+    const chart = vs.querySelector('#details .chart').getBoundingClientRect();
     const rows = [...vs.querySelectorAll('#table-body tr')];
     const visibleRows = rows.filter(r => r.getBoundingClientRect().bottom <= br.bottom + 1).length;
     const legendDot = vs.querySelector('#legend .dot').getBoundingClientRect();
     const tableDot = vs.querySelector('#table-body .dot').getBoundingClientRect();
-    const stacks = [...vs.querySelectorAll('.stack')].filter(s => s.querySelector('.bar-segment'));
+    const stacks = [...vs.querySelectorAll('#details .stack')].filter(s => s.querySelector('.bar-segment'));
     const maxStackH = Math.max(0, ...stacks.map(s => s.getBoundingClientRect().height));
     const maxStackDiff = Math.max(0, ...stacks.map(s => {
       const h = s.getBoundingClientRect().height;
@@ -520,10 +611,11 @@ test('font sync, scope switching and quota window reference render end-to-end in
       bodyScrollTop: body.scrollTop,
       bodyScrollHeight: body.scrollHeight,
       bodyClientHeight: body.clientHeight,
-      chartVisible: vs.querySelector('.chart').getBoundingClientRect().bottom <= br.bottom + 1,
-      chartWrapNoVScroll: vs.querySelector('.chart-wrap').scrollHeight <= vs.querySelector('.chart-wrap').clientHeight + 1,
+      chartVisible: vs.querySelector('#details .chart').getBoundingClientRect().bottom <= br.bottom + 1,
+      chartWrapNoVScroll: vs.querySelector('#details .chart-wrap').scrollHeight <= vs.querySelector('#details .chart-wrap').clientHeight + 1,
       headVisible: vs.querySelector('#table-head').getBoundingClientRect().bottom <= br.bottom + 1,
       visibleRows,
+      hasStackedBars: vs.querySelectorAll('#details .bar-segment').length > 0,
       legendDot: [Math.round(legendDot.width), Math.round(legendDot.height)],
       tableDot: [Math.round(tableDot.width), Math.round(tableDot.height)],
       maxStackH,
@@ -537,6 +629,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
   assert.equal(detailsMetrics.chartWrapNoVScroll, true, 'chart-wrap must not introduce vertical scrollbar/clipping');
   assert.equal(detailsMetrics.headVisible, true, 'table header should fit cleanly above the fold');
   assert.ok(detailsMetrics.visibleRows >= 5, `at least 5 table rows should be visible above the fold at 1280x800, got ${detailsMetrics.visibleRows}`);
+  assert.equal(detailsMetrics.hasStackedBars, true, 'colored stacked bar segments must be preserved');
   assert.deepEqual(detailsMetrics.legendDot, [7, 7]);
   assert.deepEqual(detailsMetrics.tableDot, [7, 7]);
   assert.ok(detailsMetrics.maxStackH <= 150.5 && detailsMetrics.maxStackH > 10, 'stack height respects 150px plot height: ' + detailsMetrics.maxStackH);
@@ -563,7 +656,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
       bodyTop: br.top,
     };
   }`);
-  assert.ok(scrolled.scrollTop > 50, 'page-body should scroll when 16 models are displayed');
+  assert.ok(scrolled.scrollTop > 50, 'page-body should scroll when 18 models are displayed');
   assert.deepEqual(scrolled.pinAfter, detailsMetrics.pinBefore, 'pinned top-right controls, tabs, and scope toggle must never move when scrolling');
   assert.ok(scrolled.thStickyTop >= scrolled.bodyTop - 1 && scrolled.thStickyTop <= scrolled.bodyTop + 2, `sticky thead th should stick to top of page-body (${scrolled.thStickyTop} vs ${scrolled.bodyTop})`);
 
@@ -571,7 +664,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
   await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot.getElementById('previous').click()`);
   const emptyChartFrame = await evalJs(`() => {
     const vs = document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('usage-dashboard').firstElementChild.shadowRoot;
-    const chart = vs.querySelector('.chart').getBoundingClientRect();
+    const chart = vs.querySelector('#details .chart').getBoundingClientRect();
     return {
       rows: vs.querySelectorAll('#table-body tr').length,
       chartFrame: { x: Math.round(chart.x), width: Math.round(chart.width) },
@@ -614,36 +707,116 @@ test('font sync, scope switching and quota window reference render end-to-end in
   await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('card-language-zh').click()`);
   await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('week-usage-value').textContent === '129.9M toks (约 216.2M 满额)'`, 'restore zh-CN');
 
-  // Verify compaction pill and deduplicated #quota-error on inline widget
-  compactionMarkers = 2;
-  quotaErrMsg = '读取 Antigravity 进程信息超时';
-  await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.querySelector('.refresh').click()`);
-  await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('context-compaction-pill').textContent === '🗜 2 次'`, 'inline compaction pill rendered');
-  const inlineCompactionAndErr = await evalJs(`() => {
+  // Verify stale/discovery errors render sanitized and once in #quota-error (never duplicated in five-note/week-note)
+  staleError = 'Command failed: powershell.exe -NoProfile -NonInteractive -Command Get-CimInstance Win32_Process';
+  await waitUntil(`() => {
+    const sr = document.getElementById('ag-pulse-status-bar').shadowRoot;
+    return !sr.getElementById('quota-error').hidden && sr.getElementById('quota-error').textContent === '统计面板暂时无法连接';
+  }`, 'sanitized raw command error shown once in #quota-error');
+  const errorLayout = await evalJs(`() => {
     const sr = document.getElementById('ag-pulse-status-bar').shadowRoot;
     return {
-      pillHidden: sr.getElementById('context-compaction-pill').hidden,
-      pillText: sr.getElementById('context-compaction-pill').textContent,
-      ctxChipTitle: sr.querySelector('[data-card="context"]').getAttribute('title'),
-      quotaErrHidden: sr.getElementById('quota-error').hidden,
-      quotaErrText: sr.getElementById('quota-error').textContent,
+      quotaError: sr.getElementById('quota-error').textContent,
       fiveNoteHidden: sr.getElementById('five-note').hidden,
+      fiveNoteText: sr.getElementById('five-note').textContent,
       weekNoteHidden: sr.getElementById('week-note').hidden,
+      weekNoteText: sr.getElementById('week-note').textContent,
     };
   }`);
-  assert.equal(inlineCompactionAndErr.pillHidden, false);
-  assert.equal(inlineCompactionAndErr.pillText, '🗜 2 次');
-  assert.ok(inlineCompactionAndErr.ctxChipTitle.includes('🗜 2 次'), 'ctxChip title includes compaction count: ' + inlineCompactionAndErr.ctxChipTitle);
-  assert.equal(inlineCompactionAndErr.quotaErrHidden, false);
-  assert.equal(inlineCompactionAndErr.quotaErrText, '读取 Antigravity 进程信息超时');
-  assert.equal(inlineCompactionAndErr.fiveNoteHidden, true, 'quotaError should not duplicate inside five-note');
-  assert.equal(inlineCompactionAndErr.weekNoteHidden, true, 'quotaError should not duplicate inside week-note');
-  compactionMarkers = 0;
-  quotaErrMsg = null;
+  assert.deepEqual(errorLayout, {
+    quotaError: '统计面板暂时无法连接',
+    fiveNoteHidden: true,
+    fiveNoteText: '',
+    weekNoteHidden: true,
+    weekNoteText: '',
+  });
+  staleError = '读取 Antigravity 进程信息超时';
+  await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('quota-error').textContent === '读取 Antigravity 进程信息超时'`, 'discovery timeout message rendered in #quota-error');
+  staleError = null;
+  await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('quota-error').hidden`, 'quota-error hides once recovered');
+
+  // Transient bridge timeout/offline response must keep the widget visible and preserve live metrics as stale
+  transientOffline = true;
+  await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('dot').classList.contains('stale')`, 'transient offline switches dot to stale');
+  const duringTransient = await evalJs(`() => {
+    const bar = document.getElementById('ag-pulse-status-bar');
+    const sr = bar.shadowRoot;
+    return {
+      visibility: getComputedStyle(bar).visibility,
+      inlineVisibility: bar.style.visibility,
+      layout: bar.dataset.layout,
+      density: bar.dataset.density,
+      tps: sr.getElementById('tps').textContent,
+      cacheTotal: sr.getElementById('cache-total').textContent,
+      contextPct: sr.getElementById('context-percent').textContent,
+      quotaErrorHidden: sr.getElementById('quota-error').hidden,
+      quotaErrorText: sr.getElementById('quota-error').textContent,
+    };
+  }`);
+  assert.equal(duringTransient.visibility, 'visible', 'transient timeout must never hide the status bar');
+  assert.equal(duringTransient.inlineVisibility, '');
+  assert.equal(duringTransient.layout, 'ready');
+  assert.equal(duringTransient.density, 'full', 'transient timeout must not collapse hydrated bar to icons-only');
+  assert.notEqual(duringTransient.tps, '—');
+  assert.notEqual(duringTransient.cacheTotal, '— tok');
+  assert.notEqual(duringTransient.contextPct, '—');
+  assert.equal(duringTransient.quotaErrorHidden, true, 'transient reconnect must not display reconnecting warning in quota card');
+  assert.equal(duringTransient.quotaErrorText, '');
+  transientOffline = false;
+  await waitUntil(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.getElementById('dot').classList.contains('live')`, 'dot recovers to live after transient offline');
+
+  // Unhydrated cold-start transient timeout must show connecting/loading state instead of contextUnknown/noQuota
+  const navigateAndWait = async url => {
+    let loaded;
+    const done = new Promise(resolve => { loaded = resolve; });
+    const prev = cdp.onEvent;
+    cdp.onEvent = msg => { prev?.(msg); if (msg.method === 'Page.loadEventFired') loaded(); };
+    try {
+      await cdp.command('Page.navigate', { url });
+      await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error('Page load timeout: ' + url)), 15000))]);
+    } finally {
+      cdp.onEvent = prev;
+    }
+  };
+  transientOffline = true;
+  await navigateAndWait(`${baseUrl}/inline-fixture?cold=1`);
+  await waitUntil(`() => {
+    const bar = document.getElementById('ag-pulse-status-bar');
+    const sr = bar?.shadowRoot;
+    return bar?.dataset.layout === 'ready' && sr?.getElementById('dot')?.classList.contains('offline') && sr.getElementById('context-summary')?.textContent === '连接 Antigravity…';
+  }`, 'cold-start transient timeout renders connecting state');
+  const coldTransient = await evalJs(`() => {
+    const sr = document.getElementById('ag-pulse-status-bar').shadowRoot;
+    sr.querySelector('[data-card="context"]').click();
+    return {
+      contextSummary: sr.getElementById('context-summary').textContent,
+      fiveNoteHidden: sr.getElementById('five-note').hidden,
+      fiveNoteText: sr.getElementById('five-note').textContent,
+      weekNoteHidden: sr.getElementById('week-note').hidden,
+      weekNoteText: sr.getElementById('week-note').textContent,
+      quotaErrorHidden: sr.getElementById('quota-error').hidden,
+      quotaErrorText: sr.getElementById('quota-error').textContent,
+    };
+  }`);
+  assert.deepEqual(coldTransient, {
+    contextSummary: '连接 Antigravity…',
+    fiveNoteHidden: false,
+    fiveNoteText: '读取额度…',
+    weekNoteHidden: true,
+    weekNoteText: '',
+    quotaErrorHidden: true,
+    quotaErrorText: '',
+  });
+  transientOffline = false;
+  await evalJs(`() => document.getElementById('ag-pulse-status-bar').shadowRoot.querySelector('.refresh').click()`);
+  await waitUntil(`() => {
+    const sr = document.getElementById('ag-pulse-status-bar').shadowRoot;
+    return sr.getElementById('dot').classList.contains('live') && sr.getElementById('context-percent').textContent !== '—' && sr.getElementById('five-note').hidden;
+  }`, 'cold-start widget hydrates cleanly once sidecar responds');
 
   // 2. Navigate to Sidecar Panel and verify Fira Code font sync + compact quota height + toks cache card
   signedIn = true;
-  await cdp.command('Page.navigate', { url: `${baseUrl}/` });
+  await navigateAndWait(`${baseUrl}/`);
   await waitUntil(`() => document.getElementById('strip-tps')?.textContent && document.getElementById('strip-tps').textContent !== '—'`, 'panel hydrated');
   await evalJs(`() => {
     document.querySelector('.widget').style.height = '580px';
@@ -676,6 +849,7 @@ test('font sync, scope switching and quota window reference render end-to-end in
   assert.equal(panelCheck.fiveVal, '81.1M toks (约 644.2M 满额)');
   assert.equal(panelCheck.weekVal, '129.9M toks (约 216.2M 满额)');
   assert.equal(panelCheck.fits, true, `context-card should fit cleanly inside 580px frame: ${panelCheck.scrollH} vs ${panelCheck.clientH}`);
+  assert.equal(await evalJs(`() => document.getElementById('context-compaction-pill').textContent`), '🗜 2 次');
   assert.equal(panelCheck.stripCacheTotal, '61.8M tok', 'panel top strip retains tok');
   assert.equal(panelCheck.cacheCoverage, '61,795,796');
   assert.equal(panelCheck.cacheCoverageUnit, 'toks');
@@ -729,9 +903,242 @@ test('font sync, scope switching and quota window reference render end-to-end in
   await evalJs(`() => document.getElementById('refresh-button').click()`);
   await waitUntil(`() => document.getElementById('integration-note').textContent.includes('內嵌狀態列正在自動重新連線')`, 'zh-TW generic reconnecting note');
 
+  integrationState = { state: 'unavailable', reason: 'remote-hub' };
+  await evalJs(`() => document.getElementById('refresh-button').click()`);
+  await waitUntil(`() => document.getElementById('integration-note').textContent.includes('遠端 SSH/WSL 環境')`, 'zh-TW remote-hub note');
+
   integrationState = { state: 'mounted' };
   await evalJs(`() => document.getElementById('refresh-button').click()`);
   await waitUntil(`() => document.getElementById('integration-note').textContent === ''`, 'mounted clears integration-note');
+
+  // 3. 3D Nailoong mascot anti-flicker regression suite:
+  //    - zero self-triggered document MutationObserver churn during live animation
+  //    - React model-selector re-render stability (button[aria-label^="Select model"] without data-testid + 2.35.0 running aria-label suffix)
+  //    - hasCollision precision (ignores Radix/Base-UI tooltips, off-screen 2.35.0 aria-hidden modal drawer & non-overlapping non-modal dialogs; hides cleanly on overlapping listbox/select-popup with spatial + temporal hysteresis)
+  //    - viewport top-threshold hysteresis (no chatter across 91..98px boundary jitter)
+  //    - unready/evicted atlas frame retention (never clears canvas to blank while source is incomplete)
+  integrationState = null;
+  billionSpeed = false;
+  transientOffline = false;
+  await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 2, mobile: false });
+  await navigateAndWait(`${baseUrl}/inline-fixture?nailong=1`);
+  await waitUntil(`() => {
+    const bar = document.getElementById('ag-pulse-status-bar');
+    return location.pathname.startsWith('/c/') && bar?.dataset.layout === 'ready' && bar.shadowRoot?.getElementById('tps')?.textContent !== '—';
+  }`, 'nailong inline-fixture document committed and hydrated');
+  await evalJs(`() => {
+    window.__nextFrame = () => new Promise(resolve => {
+      let done = false;
+      const fin = () => { if (!done) { done = true; resolve(); } };
+      requestAnimationFrame(fin);
+      setTimeout(fin, 40);
+    });
+    document.body.style.padding = '0 40px 40px';
+    document.querySelector('.composer').style.marginTop = '160px';
+    window.dispatchEvent(new Event('resize'));
+  }`);
+  await new Promise(r => setTimeout(r, 80));
+  await waitUntil(`() => {
+    const bar = document.getElementById('ag-pulse-status-bar');
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const st = host?.__agPulseNailongDebug?.state;
+    const cv = host?.shadowRoot?.querySelector('.rig-canvas');
+    if (!bar || bar.dataset.motion || !st?.shown || !st.stageShown || st.stageHidden || st.paintCount < 1 || !cv) return false;
+    const data = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    let opaque = 0;
+    for (let i = 3; i < data.length; i += 16) if (data[i] > 16) opaque++;
+    return opaque > 200;
+  }`, '3D Nailoong mascot mounted and painted initial atlas frame');
+  await new Promise(r => setTimeout(r, 320));
+  await waitUntil(`() => !document.getElementById('ag-pulse-status-bar')?.dataset.motion`, 'bar density motion settled before idle check');
+
+  // 3a. Zero self-triggered document.documentElement mutations & zero show/hide toggles over 360ms live animation
+  const idleNailong = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const startToggles = dbg.state.showToggleCount;
+    let docMutations = 0;
+    const obs = new MutationObserver(records => { docMutations += records.length; });
+    obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+    await new Promise(r => setTimeout(r, 360));
+    obs.disconnect();
+    return { docMutations, toggleDelta: dbg.state.showToggleCount - startToggles, shown: dbg.state.shown };
+  }`);
+  assert.deepEqual(idleNailong, { docMutations: 0, toggleDelta: 0, shown: true }, 'Nailoong idle animation must not mutate document DOM or toggle shown');
+
+  // 3b. React model-selector re-render stability without [data-testid="model-selector-trigger"]
+  const modelRerender = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const startToggles = dbg.state.showToggleCount;
+    const left = document.querySelector('.composer .left');
+    for (let i = 0; i < 5; i++) {
+      const oldBtn = left.querySelector('[data-testid="model-selector-trigger"], button[aria-label^="Select model"]');
+      const nextBtn = document.createElement('button');
+      nextBtn.setAttribute('role', 'combobox');
+      nextBtn.setAttribute('aria-haspopup', 'listbox');
+      nextBtn.setAttribute('aria-label', 'Select model, current: Gemini 4 Neon #' + i + (i % 2 ? ', Model cannot be changed while the agent is running' : ''));
+      nextBtn.textContent = 'Gemini 4 Neon';
+      oldBtn.replaceWith(nextBtn);
+      await Promise.resolve();
+      await window.__nextFrame();
+    }
+    return {
+      shown: dbg.state.shown,
+      stageShown: dbg.state.stageShown,
+      toggleDelta: dbg.state.showToggleCount - startToggles,
+    };
+  }`);
+  assert.deepEqual(modelRerender, { shown: true, stageShown: true, toggleDelta: 0 }, 'Replacing Select model button across React re-renders must never bounce Nailoong');
+
+  // 3c. Non-overlapping non-modal [role="dialog"], closed 2.35.0 off-screen drawer [aria-modal="true"][aria-hidden="true"], & Radix/Base-UI [role="tooltip"] must not hide Nailoong
+  const nonBlockingPopups = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const actorRect = host.shadowRoot.querySelector('.actor').getBoundingClientRect();
+    const startToggles = dbg.state.showToggleCount;
+    const sideDialog = document.createElement('div');
+    sideDialog.id = 'non-modal-side-dialog';
+    sideDialog.setAttribute('role', 'dialog');
+    sideDialog.style.cssText = 'position:fixed;left:8px;top:24px;width:260px;height:200px;background:#222;';
+    const closedDrawer = document.createElement('div');
+    closedDrawer.id = 'closed-235-drawer';
+    closedDrawer.setAttribute('role', 'dialog');
+    closedDrawer.setAttribute('aria-modal', 'true');
+    closedDrawer.setAttribute('aria-hidden', 'true');
+    closedDrawer.style.cssText = 'position:fixed;left:0;top:0;width:320px;height:800px;transform:translateX(-100%);pointer-events:none;';
+    const radixTip = document.createElement('div');
+    radixTip.id = 'radix-hover-tip';
+    radixTip.setAttribute('data-radix-popper-content-wrapper', '');
+    radixTip.style.cssText = \`position:fixed;left:\${Math.round(actorRect.left)}px;top:\${Math.round(actorRect.top + 16)}px;width:120px;height:32px;\`;
+    radixTip.innerHTML = '<div role="tooltip">Toolbar tooltip</div>';
+    const baseUiPortal = document.createElement('div');
+    baseUiPortal.setAttribute('data-base-ui-portal', '');
+    baseUiPortal.innerHTML = \`<div style="position:fixed;left:\${Math.round(actorRect.left)}px;top:\${Math.round(actorRect.top + 24)}px;width:120px;height:28px;"><div role="tooltip">Base UI tooltip</div></div>\`;
+    document.body.append(sideDialog, closedDrawer, radixTip, baseUiPortal);
+    for (let i = 0; i < 6; i++) {
+      window.dispatchEvent(new Event('resize'));
+      await window.__nextFrame();
+    }
+    const res = { shown: dbg.state.shown, toggleDelta: dbg.state.showToggleCount - startToggles };
+    sideDialog.remove();
+    closedDrawer.remove();
+    radixTip.remove();
+    baseUiPortal.remove();
+    return res;
+  }`);
+  assert.deepEqual(nonBlockingPopups, { shown: true, toggleDelta: 0 }, 'Non-modal side dialog, closed 2.35.0 drawer, and Radix/Base-UI hover tooltips must not flicker Nailoong');
+
+  // 3d. Overlapping [role="listbox"] / [data-select-popup] hides cleanly with zero oscillation across repeated ticks + transient bounce guard
+  const collisionStability = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const actorRect = host.shadowRoot.querySelector('.actor').getBoundingClientRect();
+    const startToggles = dbg.state.showToggleCount;
+    const listbox = document.createElement('div');
+    listbox.id = 'overlap-listbox';
+    listbox.setAttribute('role', 'listbox');
+    listbox.setAttribute('data-select-popup', '');
+    listbox.style.cssText = \`position:fixed;left:\${Math.round(actorRect.left - 8)}px;top:\${Math.round(actorRect.top + 12)}px;width:160px;height:130px;background:#2a2b2f;\`;
+    document.body.append(listbox);
+    window.dispatchEvent(new Event('resize'));
+    await window.__nextFrame();
+    await window.__nextFrame();
+    const hiddenCleanly = !dbg.state.shown && !dbg.state.stageShown;
+    const togglesAfterHide = dbg.state.showToggleCount;
+    // Immediate transient 40ms close -> reopen (< 240ms since hide) must be absorbed by unhide cooldown without flashing
+    listbox.remove();
+    window.dispatchEvent(new Event('resize'));
+    await new Promise(r => setTimeout(r, 45));
+    document.body.append(listbox);
+    window.dispatchEvent(new Event('resize'));
+    await new Promise(r => setTimeout(r, 60));
+    const absorbedTransientBounce = !dbg.state.shown && dbg.state.showToggleCount === togglesAfterHide;
+    for (let i = 0; i < 10; i++) {
+      listbox.style.top = \`\${Math.round(actorRect.top + 12 + (i % 2 ? 2 : -2))}px\`;
+      window.dispatchEvent(new Event('resize'));
+      await window.__nextFrame();
+    }
+    const zeroOscillationWhileOverlapped = !dbg.state.shown && dbg.state.showToggleCount === togglesAfterHide;
+    listbox.remove();
+    window.dispatchEvent(new Event('resize'));
+    return {
+      hiddenCleanly,
+      hideIncrement: togglesAfterHide - startToggles,
+      zeroOscillationWhileOverlapped,
+      absorbedTransientBounce,
+    };
+  }`);
+  assert.deepEqual(collisionStability, {
+    hiddenCleanly: true,
+    hideIncrement: 1,
+    zeroOscillationWhileOverlapped: true,
+    absorbedTransientBounce: true,
+  });
+  await waitUntil(`() => {
+    const st = document.querySelector('[data-ag-pulse-neon-mascot]')?.__agPulseNailongDebug?.state;
+    return st?.shown === true && st.stageShown === true;
+  }`, 'Nailoong smoothly restores after overlapping listbox closes');
+
+  // 3e. Viewport top-threshold hysteresis: jittering composer top across 91..98px while visible must never toggle
+  const boundaryHysteresis = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const comp = document.querySelector('.composer');
+    const startToggles = dbg.state.showToggleCount;
+    for (const topPx of [97, 93, 95, 91, 96, 92, 98, 94]) {
+      comp.style.marginTop = topPx + 'px';
+      window.dispatchEvent(new Event('resize'));
+      await window.__nextFrame();
+      await window.__nextFrame();
+    }
+    const res = { shown: dbg.state.shown, toggleDelta: dbg.state.showToggleCount - startToggles };
+    comp.style.marginTop = '160px';
+    window.dispatchEvent(new Event('resize'));
+    await window.__nextFrame();
+    return res;
+  }`);
+  assert.deepEqual(boundaryHysteresis, { shown: true, toggleDelta: 0 }, 'Composer top jitter inside hysteresis deadband must never toggle Nailoong');
+
+  // 3f. Unready / evicted atlas source retains last painted frame (zero blank-canvas flash)
+  const frameRetention = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const cv = host.shadowRoot.querySelector('.rig-canvas');
+    const countOpaque = () => {
+      const data = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+      let n = 0;
+      for (let i = 3; i < data.length; i += 16) if (data[i] > 16) n++;
+      return n;
+    };
+    const beforePixels = countOpaque();
+    const skippedBefore = dbg.state.skippedUnreadyCount;
+    const waveMeta = dbg.atlases.wave;
+    const savedImg = waveMeta.img;
+    waveMeta.img = new Image(); // incomplete, 0x0 unready image
+    let minPixelsDuringUnready = Infinity;
+    for (let i = 0; i < 6; i++) {
+      dbg.stepFrame(0.08);
+      await window.__nextFrame();
+      minPixelsDuringUnready = Math.min(minPixelsDuringUnready, countOpaque());
+    }
+    const skippedDelta = dbg.state.skippedUnreadyCount - skippedBefore;
+    const paintsBeforeRestore = dbg.state.paintCount;
+    waveMeta.img = savedImg;
+    dbg.stepFrame(0.08);
+    await window.__nextFrame();
+    const paintsAfterRestore = dbg.state.paintCount;
+    return {
+      beforePixels,
+      minPixelsDuringUnready,
+      skippedDelta,
+      resumedPainting: paintsAfterRestore > paintsBeforeRestore,
+    };
+  }`);
+  assert.ok(frameRetention.beforePixels > 200, 'Canvas should have Nailoong pixels before unready test');
+  assert.equal(frameRetention.minPixelsDuringUnready, frameRetention.beforePixels, 'Canvas must retain exact painted frame without flashing blank while atlas is unready');
+  assert.ok(frameRetention.skippedDelta >= 1, 'Unready atlas ticks should increment skippedUnreadyCount');
+  assert.equal(frameRetention.resumedPainting, true, 'Canvas animation must resume advancing once atlas source is ready again');
   } finally {
     try { cdp?.close(); } catch {}
     killBrowser(child);

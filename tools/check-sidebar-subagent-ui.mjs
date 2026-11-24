@@ -10,9 +10,9 @@ import {trajectoryMetrics} from '../sidecars/panel/metrics.mjs';
 const repo=join(dirname(fileURLToPath(import.meta.url)),'..');
 const preview=process.argv.includes('--preview');
 const ids={main:'11111111-1111-1111-1111-111111111111',child:'22222222-2222-2222-2222-222222222222',other:'33333333-3333-3333-3333-333333333333'};
-const files=await Promise.all(['i18n.cjs','theme.cjs','usage-ui.cjs','inline-widget.cjs'].map(name=>readFile(name==='inline-widget.cjs'&&process.env.AG_PULSE_SIDEBAR_SOURCE?process.env.AG_PULSE_SIDEBAR_SOURCE:join(repo,'compat',name),'utf8')));
+const files=await Promise.all(['i18n.cjs','theme.cjs','usage-ui.cjs','inline-widget.cjs','pricing.cjs'].map(name=>readFile(name==='inline-widget.cjs'&&process.env.AG_PULSE_SIDEBAR_SOURCE?process.env.AG_PULSE_SIDEBAR_SOURCE:join(repo,'compat',name),'utf8')));
 const extract=source=>source.slice(source.indexOf('module.exports = ')+17).trim().replace(/;$/,'');
-const install=`window.__agPulseI18nFactory=(${extract(files[0])});window.__agPulseThemeFactory=(${extract(files[1])});window.__agPulseUsageFactory=(${extract(files[2])});(${extract(files[3])})();`;
+const install=`window.__agPulseI18nFactory=(${extract(files[0])});window.__agPulseThemeFactory=(${extract(files[1])});window.__agPulsePricingFactory=(${extract(files[4])});window.__agPulseUsageFactory=(${extract(files[2])});(${extract(files[3])})();`;
 const usage={accountKey:'sidebar-fixture',today:'2026-10-30',timeZone:'Asia/Shanghai',models:['Gemini'],days:[{date:'2026-10-30',models:{Gemini:{uncached:400,cacheRead:600,cacheWrite:0,output:180,total:1180,requests:1}}}],todayTokens:1180,weekTokens:1180,monthTokens:1180,totalTokens:1180,requests:1,syncing:false};
 function sample(id,output,context,cached){return {connection:'live',groups:[],usage,speed:trajectoryMetrics({trajectory:{cascadeId:id,generatorMetadata:[{chatModel:{modelDisplayName:id===ids.main?'Gemini 4':'Gemini 3.8 Flash',chatStartMetadata:{contextWindowMetadata:{estimatedTokensUsed:context*1000,maxContextTokens:100000}},usage:{inputTokens:1000-cached,cacheReadTokens:cached,responseOutputTokens:output,outputTokens:output,apiProvider:'API_PROVIDER_GOOGLE_GEMINI'},streamingDuration:'2s'}}]}})};}
 const samples={[ids.main]:sample(ids.main,100,12,200),[ids.child]:sample(ids.child,180,87,600),[ids.other]:sample(ids.other,140,46,800)};

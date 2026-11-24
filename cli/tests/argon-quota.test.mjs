@@ -27,7 +27,7 @@ test('official Argon weekly bucket is independent, active first, and does not hi
   assert.match(rows.find(row=>row.startsWith('Gemini')),/5h 80%.*week 70%/);
   assert.match(rows.find(row=>row.startsWith('Claude\/GPT')),/5h 60%.*week 50%/);
   assert.doesNotMatch(rows.join('\n'),/… \+1/);
-  assert.equal(normalize(input).cacheRate.reason,'unverified-cli-version','Adding a quota never opts Argon into an unverified cache policy');
+  assert.equal(normalize(input).requestCacheRate,90);
  }
 });
 
@@ -61,6 +61,9 @@ test('switching model families changes priority without changing balances; suppl
  input.model={id:'gemini-3.8-flash-high',display_name:'Gemini 4 Argon (High)'};
  assert.match(plain(input).split('\n')[1],/^Gemini\s/);
  input.model={id:'claude-sonnet-4-6'};assert.match(plain(input).split('\n')[1],/^Claude\/GPT/);
+ input.model={display_name:'Orchestrator Claude Opus 5.5 (Max)'};assert.match(plain(input).split('\n')[1],/^Claude\/GPT/);
+ input.model={display_name:'Orchestrator'};assert.match(plain(input).split('\n')[1],/^Gemini\s/);
+ input.model={display_name:'Gemini 4 Neon'};assert.match(plain(input).split('\n')[1],/^Gemini\s/);
  input.model={display_name:'Gemini 4 Argon (Medium)'};assert.match(plain(input).split('\n')[1],/^Argon\s/);
  const row=plain(input).split('\n')[1];assert.match(row,/week 40%/);
 });
@@ -103,11 +106,11 @@ test('Argon progress retains quota thresholds and all output stays inside narrow
  }
 });
 
-test('preview command makes all three quota families reproducible without changing cache assumptions',()=>{
+test('preview command makes all three quota families reproducible',()=>{
  const script=fileURLToPath(new URL('../statusline.mjs',import.meta.url));
  const result=spawnSync(process.execPath,[script,'--preview-argon','--language','en','--no-color'],{encoding:'utf8',windowsHide:true,timeout:10000});
  assert.equal(result.status,0);assert.equal(result.stderr,'');
  assert.match(result.stdout,/^Argon\s+left\s+week 40%/m);
  assert.match(result.stdout,/^Gemini\s/m);assert.match(result.stdout,/^Claude\/GPT\s/m);
- assert.match(result.stdout,/Cache --/);assert.doesNotMatch(result.stdout,/\x1b/);
+ assert.match(result.stdout,/Cache 31\.4%/);assert.doesNotMatch(result.stdout,/\x1b/);
 });

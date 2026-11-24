@@ -8,8 +8,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULES = [f'compat/{name}' for name in ['runtime-ui.mjs', 'platform.mjs', 'preferences.mjs',
-    'sidecar-owner.mjs', 'i18n.cjs', 'theme.cjs', 'inline-widget.cjs', 'usage-ui.cjs']]
-MODULES += [f'sidecars/panel/{name}.mjs' for name in ['collection-state', 'background-statistics', 'background-worker', 'disk-statistics', 'usage-disk-worker', 'client', 'trajectory-json', 'trajectory-reader', 'discovery', 'store', 'history', 'metrics', 'rate-quality', 'context', 'transcript', 'usage', 'pricing', 'local-conversations', 'delegation', 'task-usage', 'delegated-usage']]
+    'sidecar-owner.mjs', 'host-theme.mjs', 'i18n.cjs', 'theme.cjs', 'inline-widget.cjs', 'pricing.cjs', 'usage-ui.cjs']]
+MODULES += [f'sidecars/panel/{name}.mjs' for name in ['collection-state', 'background-statistics', 'background-worker', 'disk-statistics', 'usage-disk-worker', 'usage-index', 'client', 'trajectory-json', 'trajectory-reader', 'discovery', 'store', 'history', 'metrics', 'rate-quality', 'context', 'transcript', 'quota-estimator', 'usage', 'pricing', 'local-conversations', 'delegation', 'task-usage', 'delegated-usage']]
 MODULES += [f'ide/{name}' for name in ['extension.cjs', 'host.cjs', 'main.mjs', 'client.mjs',
     'discovery.mjs', 'runtime.mjs', 'webview-targets.mjs', 'surface.cjs', 'launch.mjs', 'manage.py']]
 

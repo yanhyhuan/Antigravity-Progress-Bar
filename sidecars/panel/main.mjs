@@ -7,7 +7,7 @@ import { MetricsStore } from './store.mjs';
 import { DesktopUsage } from './usage.mjs';
 import { loadSidecarSdk } from './sdk.mjs';
 import { RuntimeUi, makeRendererSource } from '../../compat/runtime-ui.mjs';
-import { agentExecutables, platformPaths } from '../../compat/platform.mjs';
+import { agentExecutables, isRemoteHeadlessHost, platformPaths } from '../../compat/platform.mjs';
 import { inspectHostArchive, inspectDesktopLaunch, ensureDesktopLaunchConfig } from '../../compat/launch-config.mjs';
 import { PreferencesStore } from '../../compat/preferences.mjs';
 import { SidecarOwner } from '../../compat/sidecar-owner.mjs';
@@ -48,8 +48,9 @@ const metrics = async input => {
     return {connection:store.quota?'live':'stale',groups:store.quota||[],speed:null,usage:await usage.snapshot({sync:false,scope:requestedScope,groups:store.quota}),preferences:prefs,theme,integration:integration.health};
   }
   const base=await store.snapshot(input);if(input?.usageSync===true)void usage.sync(true);
-  return {...base,...(liveComposerModel?{composerModel:liveComposerModel}:{}),usage:await usage.snapshot({sync:input?.usageSync===true,scope:prefs?.usageScope||'local',groups:base.groups}),preferences:prefs,theme,integration:integration.health};
+  return {...base,...(liveComposerModel?{composerModel:liveComposerModel}:{}),usage:await usage.snapshot({sync:input?.usageSync===true,scope:prefs?.usageScope||'local',groups:base.groups,maxWaitMs:input?.usageSync===true?0:350}).catch(()=>null),preferences:prefs,theme,integration:integration.health};
 };
+const pricingSource=()=>{const s=readFileSync(join(HERE,'..','..','compat','pricing.cjs'),'utf8');return `window.__agPulsePricingFactory=(${s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'')});`;};
 const usageSource=()=>{const s=readFileSync(join(HERE,'..','..','compat','usage-ui.cjs'),'utf8');return `window.__agPulseUsageFactory=(${s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'')});`;};
 const updateSource=()=>{const s=readFileSync(join(HERE,'..','..','compat','update-ui.cjs'),'utf8');return `window.__agPulseUpdateFactory=(${s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'')});`;};
 const staticFiles = { '/': ['index.html', 'text/html'], '/styles.css': ['styles.css', 'text/css'], '/format.mjs': ['format.mjs', 'text/javascript'] };
@@ -58,7 +59,7 @@ const inlineSource=()=>{
   const i18n=readFileSync(join(HERE,'..','..','compat','i18n.cjs'),'utf8');
   const theme=readFileSync(join(HERE,'..','..','compat','theme.cjs'),'utf8');
   const extract=s=>s.slice(s.indexOf('module.exports = ')+'module.exports = '.length).trim().replace(/;$/,'');
-  return updateSource()+usageSource()+`window.__agPulseI18nFactory=(${extract(i18n)});window.__agPulseThemeFactory=(${extract(theme)});(${extract(file)})();`;
+  return updateSource()+pricingSource()+usageSource()+`window.__agPulseI18nFactory=(${extract(i18n)});window.__agPulseThemeFactory=(${extract(theme)});(${extract(file)})();`;
 };
 const i18nModule=()=>{const s=readFileSync(join(HERE,'..','..','compat','i18n.cjs'),'utf8');return 'export const createI18n='+s.slice(s.indexOf('module.exports = ')+'module.exports = '.length);};
 const themeModule=()=>{const s=readFileSync(join(HERE,'..','..','compat','theme.cjs'),'utf8');return 'export const createTheme='+s.slice(s.indexOf('module.exports = ')+'module.exports = '.length);};
@@ -106,14 +107,23 @@ const integration = new RuntimeUi({
   preferences,
   updater,
   owner:ownership?.token,owns:()=>ownership?ownership.isOwner():true,
-  source: makeRendererSource(readFileSync(join(HERE,'..','..','compat','i18n.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','inline-widget.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','theme.cjs'),'utf8'),ownership?.token,ownership?.startedAt,updateSource()+usageSource()),
+  source: makeRendererSource(readFileSync(join(HERE,'..','..','compat','i18n.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','inline-widget.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','theme.cjs'),'utf8'),ownership?.token,ownership?.startedAt,updateSource()+pricingSource()+usageSource()),
   dataDir: paths.data,
   enabled: () => { const s = runtimeSettings(); return s.enabled !== false && s.inline !== false && s.mode !== 'legacy'; },
   onTargets: () => { missingPortTicks = 0; },
   diagnoseError: async error => {
     if (error?.code !== 'ENOENT') { missingPortTicks = 0; return null; }
+    const hostResources = resolveHostResources();
+    if (isRemoteHeadlessHost({ server: store.client?.server, hasLocalHostApp: Boolean(hostResources) })) {
+      missingPortTicks = 0;
+      return {
+        state: 'unavailable',
+        reason: 'remote-hub',
+        message: 'Running in a remote SSH/WSL hub; the inline composer widget requires a local desktop renderer, while the side panel remains available.',
+      };
+    }
     missingPortTicks++;
-    const host = await inspectHostArchive(resolveHostResources());
+    const host = await inspectHostArchive(hostResources);
     const launch = await syncLaunchConfig();
     if (host.requiresDebugFlag || (missingPortTicks >= 2 && store.serverPid)) {
       const configured = Boolean(launch?.configured);
@@ -136,7 +146,9 @@ const integration = new RuntimeUi({
 if (process.env.ANTIGRAVITY_SIDECAR_WEB_PORT) {
   const { SidecarApp, Response } = await loadSidecarSdk();
   if(!await ownership.claim())process.exit(0);
-  void syncLaunchConfig(true).catch(() => {});
+  if (!isRemoteHeadlessHost({ server: store.client?.server, hasLocalHostApp: Boolean(resolveHostResources()) })) {
+    void syncLaunchConfig(true).catch(() => {});
+  }
   const app = new SidecarApp();
   for (const [path, [file, type]] of Object.entries(staticFiles)) app.api(path, () => new Response(path==='/'?panelPageSource():readFileSync(join(HERE, file), 'utf8'), { contentType: type,headers:{'Cache-Control':'no-store'} }), 'GET');
   app.page('/app.js',()=>new Response(panelAppSource(),{contentType:'application/javascript',headers:{'Cache-Control':'no-store'}}));

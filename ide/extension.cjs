@@ -15,7 +15,7 @@ exports.activate=function(context){
   function start(){
     stop();if(!vscode.workspace.getConfiguration('antigrativeDashboard.ide').get('enabled',true))return;
     if(!existsSync(join(profile,'DevToolsActivePort'))){output.appendLine('Renderer connection unavailable. Fully quit the IDE, then start with --remote-debugging-port=0 --remote-debugging-address=127.0.0.1. See the extension README.');return;}
-    child=spawn(process.execPath,['--max-old-space-size=192',join(context.extensionPath,'ide','main.mjs')],{windowsHide:true,stdio:['ignore','pipe','pipe','ipc'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1',AG_PULSE_IDE_PROFILE:profile,AG_PULSE_IDE_DATA:context.globalStorageUri.fsPath}});
+    child=spawn(process.execPath,[join(context.extensionPath,'ide','main.mjs')],{windowsHide:true,stdio:['ignore','pipe','pipe','ipc'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1',AG_PULSE_IDE_PROFILE:profile,AG_PULSE_IDE_DATA:context.globalStorageUri.fsPath}});
     const launched=child;
     // Never echo API responses, command lines or credentials into IDE logs.
     child.stdout.resume();child.stderr.resume();

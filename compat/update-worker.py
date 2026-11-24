@@ -94,8 +94,8 @@ def transaction_roots(target, working):
 
 PRIVATE = {'data', 'history-v1', 'usage-v1', 'sdk'}
 REQUIRED = ('plugin.json', 'hooks.json', 'compat/inline-widget.cjs', 'compat/runtime-ui.mjs',
-            'compat/i18n.cjs', 'compat/theme.cjs', 'compat/launch-config.mjs',
-            'compat/launch_config.py', 'sidecars/panel/main.mjs',
+            'compat/i18n.cjs', 'compat/theme.cjs', 'compat/host-theme.mjs', 'compat/pricing.cjs',
+            'compat/launch-config.mjs', 'compat/launch_config.py', 'sidecars/panel/main.mjs',
             'sidecars/panel/metrics.mjs', 'sidecars/panel/history.mjs',
             'hooks/on-stop.ps1', 'hooks/toast.ps1', 'hooks/default-settings.json',
             'sounds/done.mp3', 'sounds/error.mp3', 'assets/logo.svg')

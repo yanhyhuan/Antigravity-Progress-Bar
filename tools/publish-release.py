@@ -10,12 +10,16 @@ import zipfile
 
 LARGE_CONVERSATION_MODULES = tuple('sidecars/panel/' + name + '.mjs' for name in (
     'collection-state', 'background-statistics', 'background-worker',
-    'disk-statistics', 'usage-disk-worker',
+    'disk-statistics', 'usage-disk-worker', 'usage-index',
 ))
 IDE_RUNTIME_MODULES = tuple('ide/' + name for name in (
     'main.mjs', 'runtime.mjs', 'webview-targets.mjs', 'client.mjs',
     'discovery.mjs', 'surface.cjs',
 ))
+REQUIRED_HOOK_FILES = (
+    'hooks.json', 'hooks/on-stop.ps1', 'hooks/toast.ps1',
+    'hooks/default-settings.json', 'sounds/done.mp3', 'sounds/error.mp3',
+)
 
 
 def checked_assets(root, tag):
@@ -35,7 +39,7 @@ def checked_assets(root, tag):
             archive.getinfo(prefix + required)
         for required in IDE_RUNTIME_MODULES:
             archive.getinfo(prefix + required)
-        for required in ['compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/usage.mjs', 'sidecars/panel/pricing.mjs']:
+        for required in ['compat/pricing.cjs', 'compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/quota-estimator.mjs', 'sidecars/panel/usage.mjs', 'sidecars/panel/pricing.mjs']:
             archive.getinfo(prefix + required)
         for required in LARGE_CONVERSATION_MODULES:
             archive.getinfo(prefix + required)
@@ -48,9 +52,9 @@ def checked_assets(root, tag):
         for required in ['compat/update-ui.cjs', 'compat/update-worker.py', 'compat/update-lock.py',
                          'sidecars/panel/updater.mjs', 'sidecars/panel/local-conversations.mjs', 'docs/UPDATES.md']:
             archive.getinfo(prefix + required)
-        for required in ['install.sh', 'uninstall.sh', 'install.ps1', 'compat/runtime-ui.mjs', 'compat/launch-config.mjs', 'compat/launch_config.py', 'compat/theme.cjs', 'compat/host-theme.mjs', 'compat/preferences.mjs', 'compat/sidecar-owner.mjs', 'sidecars/panel/context.mjs', 'cli/statusline.mjs', 'cli/metrics.mjs', 'cli/render.mjs', 'cli/lifecycle.py', 'docs/CLI.md', 'docs/assets/cli-conversation.png', 'docs/assets/cli-conversation-zh.png']:
+        for required in ['install.sh', 'uninstall.sh', 'install.ps1', 'compat/runtime-ui.mjs', 'compat/launch-config.mjs', 'compat/launch_config.py', 'compat/theme.cjs', 'compat/host-theme.mjs', 'compat/preferences.mjs', 'compat/sidecar-owner.mjs', 'sidecars/panel/context.mjs', 'cli/common.mjs', 'cli/hook.mjs', 'cli/ledger.mjs', 'cli/statusline.mjs', 'cli/metrics.mjs', 'cli/render.mjs', 'cli/report.mjs', 'cli/samples.mjs', 'cli/usage.mjs', 'cli/lifecycle.py', 'tools/preview-cli.mjs', 'docs/CLI.md', 'docs/assets/cli-conversation.png', 'docs/assets/cli-conversation-zh.png']:
             archive.getinfo(prefix + required)
-        for required in ['hooks.json', 'hooks/on-stop.ps1', 'hooks/toast.ps1', 'hooks/default-settings.json', 'sounds/done.mp3', 'sounds/error.mp3']:
+        for required in REQUIRED_HOOK_FILES:
             archive.getinfo(prefix + required)
     ide_version = json.loads((root / 'ide/package.json').read_text(encoding='utf-8'))['version']
     if ide_version != version:
@@ -69,7 +73,7 @@ def checked_assets(root, tag):
             archive.getinfo(name)
         for name in IDE_RUNTIME_MODULES:
             archive.getinfo('extension/' + name)
-        for name in ['compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/usage.mjs', 'sidecars/panel/pricing.mjs']:
+        for name in ['compat/host-theme.mjs', 'compat/pricing.cjs', 'compat/usage-ui.cjs', 'sidecars/panel/rate-quality.mjs', 'sidecars/panel/quota-estimator.mjs', 'sidecars/panel/usage.mjs', 'sidecars/panel/pricing.mjs']:
             archive.getinfo('extension/' + name)
         for name in LARGE_CONVERSATION_MODULES:
             archive.getinfo('extension/' + name)

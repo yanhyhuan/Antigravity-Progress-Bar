@@ -103,17 +103,36 @@ class LaunchConfigTests(unittest.TestCase):
             proxy_info = {'target': r'C:\Tools\AntigravityProxy.exe', 'args': '', 'icon': r'C:\Apps\Antigravity.exe'}
             self.assertTrue(lc.is_antigravity_desktop_shortcut(proxy_lnk, proxy_info))
 
-            launcher_lnk = root / 'Antigravity (Proxy).lnk'
-            launcher_info = {'target': r'C:\Tools\AntigravityLauncher.exe', 'args': '', 'icon': r'C:\Apps\Antigravity.exe,0'}
-            self.assertTrue(lc.is_antigravity_desktop_shortcut(launcher_lnk, launcher_info))
-
             ide_proxy = root / 'Antigravity IDE - Dashboard Preview.lnk'
             ide_info = {'target': r'C:\Tools\AntigravityProxy.exe', 'args': '--ide', 'icon': r'D:\Antigravity IDE\Antigravity IDE.exe'}
             self.assertFalse(lc.is_antigravity_desktop_shortcut(ide_proxy, ide_info))
-            ide_launcher = root / 'Antigravity IDE.lnk'
-            ide_launcher_info = {'target': r'C:\Tools\AntigravityLauncher.exe', 'args': '--ide', 'icon': r'D:\Antigravity IDE\Antigravity IDE.exe,0'}
-            self.assertFalse(lc.is_antigravity_desktop_shortcut(ide_launcher, ide_launcher_info))
             self.assertFalse(lc.is_antigravity_desktop_shortcut(root / 'IDE.lnk', {'target': r'D:\Antigravity IDE\Antigravity IDE.exe', 'args': ''}))
+
+            launcher_target = r'C:\Users\demo\.antigravity-proxy\AntigravityLauncher.exe'
+            self.assertTrue(lc.is_antigravity_desktop_shortcut(
+                root / 'Antigravity (代理).lnk',
+                {'target': launcher_target, 'args': '', 'icon': r'C:\Apps\Antigravity.exe'},
+            ))
+            self.assertTrue(lc.is_antigravity_desktop_shortcut(
+                root / 'Antigravity (Proxy).lnk',
+                {'target': launcher_target, 'args': '', 'icon': r'C:\Apps\Antigravity.exe,0'},
+            ))
+            self.assertTrue(lc.is_antigravity_desktop_shortcut(
+                root / 'Antigravity (Прокси).lnk',
+                {'target': launcher_target, 'args': '', 'icon': ''},
+            ))
+            self.assertFalse(lc.is_antigravity_desktop_shortcut(
+                root / 'Antigravity (代理).lnk',
+                {'target': launcher_target, 'args': '', 'icon': r'D:\Antigravity IDE\Antigravity IDE.exe'},
+            ))
+            self.assertFalse(lc.is_antigravity_desktop_shortcut(
+                root / 'Antigravity (Proxy).lnk',
+                {'target': launcher_target, 'args': '--ide', 'icon': r'C:\Apps\Antigravity.exe'},
+            ))
+            self.assertFalse(lc.is_antigravity_desktop_shortcut(
+                root / 'Unrelated.lnk',
+                {'target': launcher_target, 'args': '', 'icon': ''},
+            ))
 
             merged, added = lc.merge_debug_arguments('--profile default -- https://example.com')
             self.assertEqual(added, [lc.DEBUG_PORT_FLAG, lc.DEBUG_ADDRESS_FLAG])
@@ -137,6 +156,10 @@ class LaunchConfigTests(unittest.TestCase):
             ide_lnk.write_bytes(build_lnk(r'D:\Antigravity IDE\Antigravity IDE.exe', ''))
             start_lnk = programs / 'Antigravity.lnk'
             start_lnk.write_bytes(build_lnk(r'C:\Tools\AntigravityProxy.exe', ''))
+            launcher_lnk = desktop / 'Antigravity (代理).lnk'
+            launcher_lnk.write_bytes(build_lnk(r'C:\Tools\AntigravityLauncher.exe', '', r'C:\Apps\Antigravity.exe'))
+            launcher_ide_lnk = desktop / 'Antigravity IDE (代理).lnk'
+            launcher_ide_lnk.write_bytes(build_lnk(r'C:\Tools\AntigravityLauncher.exe', '', r'D:\Antigravity IDE\Antigravity IDE.exe'))
 
             def fake_writer(updates):
                 for item in updates:
@@ -146,16 +169,19 @@ class LaunchConfigTests(unittest.TestCase):
 
             res, managed = lc.configure_desktop_launch(platform='win32', home=home, env={}, shortcut_writer=fake_writer)
             self.assertTrue(res['configured'])
-            self.assertEqual(len(res['entrypoints']), 2)
+            self.assertEqual(len(res['entrypoints']), 3)
             self.assertEqual(lc.parse_lnk(hub_lnk)['args'], '--custom --remote-debugging-port=0 --remote-debugging-address=127.0.0.1')
             self.assertEqual(lc.parse_lnk(start_lnk)['args'], '--remote-debugging-port=0 --remote-debugging-address=127.0.0.1')
+            self.assertEqual(lc.parse_lnk(launcher_lnk)['args'], '--remote-debugging-port=0 --remote-debugging-address=127.0.0.1')
             self.assertEqual(lc.parse_lnk(ide_lnk).get('args', ''), '')
+            self.assertEqual(lc.parse_lnk(launcher_ide_lnk).get('args', ''), '')
             self.assertTrue(lc.inspect_desktop_launch(platform='win32', home=home, env={})['configured'])
 
             reverted = lc.remove_desktop_launch(platform='win32', home=home, env={}, managed=managed, shortcut_writer=fake_writer)
             self.assertEqual(reverted, {})
             self.assertEqual(lc.parse_lnk(hub_lnk).get('args', ''), '--custom')
             self.assertEqual(lc.parse_lnk(start_lnk).get('args', ''), '')
+            self.assertEqual(lc.parse_lnk(launcher_lnk).get('args', ''), '')
 
     @unittest.skipUnless(sys.platform == 'win32', 'Real WScript.Shell roundtrip runs on Windows only')
     def test_windows_real_wscript_shortcut_roundtrip(self):
@@ -383,6 +409,69 @@ class LaunchConfigTests(unittest.TestCase):
                 res = manager.launch(platform='darwin', spawn=fake_spawn, runner=fake_runner, open_binary=True)
                 self.assertIsNone(res)
                 self.assertEqual(len(spawned), 1)
+
+    def test_windows_redirected_desktop_and_onedrive_shortcuts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / 'C_Users_demo'
+            redirected_desktop = root / 'D_Users_demo' / 'Desktop'
+            onedrive_root = root / 'OneDrive'
+            onedrive_desktop = onedrive_root / 'Desktop'
+            programs = home / 'AppData' / 'Roaming' / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs'
+            for directory in (home / 'Desktop', redirected_desktop, onedrive_desktop, programs):
+                directory.mkdir(parents=True)
+
+            redir_lnk = redirected_desktop / 'Antigravity.lnk'
+            redir_lnk.write_bytes(build_lnk(r'C:\Users\demo\AppData\Local\Programs\antigravity\Antigravity.exe', ''))
+            od_lnk = onedrive_desktop / 'Antigravity.lnk'
+            od_lnk.write_bytes(build_lnk(r'C:\Users\demo\AppData\Local\Programs\antigravity\Antigravity.exe', ''))
+            start_lnk = programs / 'Antigravity.lnk'
+            start_lnk.write_bytes(build_lnk(r'C:\Users\demo\AppData\Local\Programs\antigravity\Antigravity.exe', ''))
+
+            written = []
+            def fake_writer(updates):
+                written.extend(updates)
+                for item in updates:
+                    p = Path(item['path'])
+                    parsed = lc.parse_lnk(p)
+                    p.write_bytes(build_lnk(parsed['target'], item['args'], parsed.get('icon', '')))
+
+            env = {'CUSTOM_DESKTOP_ROOT': str(redirected_desktop.parent), 'OneDrive': str(onedrive_root)}
+            resolver = lambda name: '%CUSTOM_DESKTOP_ROOT%\\Desktop' if name == 'Desktop' else None
+
+            res, managed = lc.configure_desktop_launch(
+                platform='win32', home=home, env=env, shortcut_writer=fake_writer, known_folder_resolver=resolver,
+            )
+            self.assertTrue(res['configured'])
+            self.assertEqual(set(res['entrypoints']), {str(redir_lnk), str(od_lnk), str(start_lnk)})
+            self.assertEqual(len(written), 3)
+            for lnk in (redir_lnk, od_lnk, start_lnk):
+                self.assertEqual(
+                    lc.parse_lnk(lnk)['args'],
+                    '--remote-debugging-port=0 --remote-debugging-address=127.0.0.1',
+                )
+            inspected = lc.inspect_desktop_launch(
+                platform='win32', home=home, env=env, known_folder_resolver=resolver,
+            )
+            self.assertTrue(inspected['configured'])
+            self.assertEqual(set(inspected['entrypoints']), {str(redir_lnk), str(od_lnk), str(start_lnk)})
+
+            # Uninstall rollback restores redirected shortcuts cleanly from managed state.
+            reverted = lc.remove_desktop_launch(
+                platform='win32', home=home, env=env, managed=managed, shortcut_writer=fake_writer,
+            )
+            self.assertEqual(reverted, {})
+            for lnk in (redir_lnk, od_lnk, start_lnk):
+                self.assertEqual(lc.parse_lnk(lnk).get('args', ''), '')
+
+            # Deduplicates identical redirected and default paths without double-writing.
+            dedup_roots = lc._windows_shortcut_roots(
+                home,
+                {'OneDrive': str(home)},
+                known_folder_resolver=lambda name: str(home / 'Desktop') + '\\' if name == 'Desktop' else None,
+            )
+            desktop_matches = [p for p in dedup_roots if str(p).rstrip('\\/').casefold() == str(home / 'Desktop').casefold()]
+            self.assertEqual(len(desktop_matches), 1)
 
 
 if __name__ == '__main__':

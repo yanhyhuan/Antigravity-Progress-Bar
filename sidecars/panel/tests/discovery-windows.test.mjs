@@ -262,15 +262,23 @@ test('recovered discovery reaches a real loopback RPC without proxying or creden
   assert.equal(calls.length,3);assert.doesNotMatch(JSON.stringify(calls),/csrf|fixture/);
 });
 
-test('Windows process enumeration timeouts and failures sanitize raw PowerShell commands',async()=>{
-  const timeoutErr=Object.assign(new Error('Command failed: powershell.exe -Command Get-CimInstance Win32_Process SECRET_CMD'),{killed:true,signal:'SIGTERM'});
+test('Windows process discovery sanitizes PowerShell timeout, command and parse failures',async()=>{
+  const cmd='Command failed: powershell.exe -NoProfile -NonInteractive -Command Get-CimInstance Win32_Process';
+  for(const error of [
+    Object.assign(new Error(cmd),{killed:true,signal:'SIGTERM'}),
+    Object.assign(new Error(cmd),{code:'ETIMEDOUT'}),
+  ]){
+    await assert.rejects(
+      discoverProcesses({platform:'win32',run:async()=>{throw error;}}),
+      err=>{assert.equal(err.message,'读取 Antigravity 进程信息超时');assert.doesNotMatch(err.message,/powershell|Get-CimInstance/i);return true;},
+    );
+  }
   await assert.rejects(
-    discoverProcesses({platform:'win32',run:async()=>{throw timeoutErr;}}),
-    err=>err.message==='读取 Antigravity 进程信息超时'&&!err.message.includes('powershell')&&!err.message.includes('SECRET_CMD'),
+    discoverProcesses({platform:'win32',run:async()=>{throw new Error(cmd);}}),
+    err=>{assert.equal(err.message,'无法读取 Antigravity 进程信息');assert.doesNotMatch(err.message,/powershell|Get-CimInstance/i);return true;},
   );
-  const genericErr=new Error('Command failed: powershell.exe -Command Get-CimInstance Win32_Process SECRET_CMD');
   await assert.rejects(
-    discoverProcesses({platform:'win32',run:async()=>{throw genericErr;}}),
-    err=>err.message==='无法读取 Antigravity 进程信息'&&!err.message.includes('powershell')&&!err.message.includes('SECRET_CMD'),
+    discoverProcesses({platform:'win32',run:async()=>({stdout:'{invalid json'})}),
+    err=>{assert.equal(err.message,'无法读取 Antigravity 进程信息');return true;},
   );
 });

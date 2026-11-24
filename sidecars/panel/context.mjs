@@ -8,9 +8,38 @@ const aliases=new Map([
  ['model_placeholder_m35','Claude Sonnet 4.6 (Thinking)'],
  ['model_placeholder_m26','Claude Opus 4.6 (Thinking)'],
  ['model_openai_gpt_oss_120b_medium','GPT-OSS 120B (Medium)'],
+ // Verified against Antigravity 2.35.0 clientModelConfigs catalog (2026-11-25).
+ ['model_placeholder_m400','Claude Opus 5.5 (Low)'],
+ ['model_placeholder_m401','Claude Opus 5.5 (Medium)'],
+ ['model_placeholder_m402','Claude Opus 5.5 (High)'],
+ ['model_placeholder_m403','Claude Sonnet 5.5 (Low)'],
+ ['model_placeholder_m404','Claude Sonnet 5.5 (Medium)'],
+ ['model_placeholder_m405','Claude Sonnet 5.5 (High)'],
+ ['model_placeholder_m417','Gemini 4 Argon (High)'],
+ ['model_placeholder_m418','Gemini 4 Argon (Medium)'],
+ ['model_placeholder_m419','Gemini 4 Argon (Low)'],
+ ['model_placeholder_m427','Gemini 4 Carbon (High)'],
+ ['model_placeholder_m437','Gemini 4 Carbon (Medium)'],
+ ['model_placeholder_m438','Gemini 4 Carbon (Low)'],
+ ['model_placeholder_m525','Gemini 4 Hydrogen (High)'],
+ ['model_placeholder_m526','Gemini 4 Hydrogen (Medium)'],
+ ['model_placeholder_m527','Gemini 4 Hydrogen (Low)'],
+ ['model_placeholder_m528','Gemini 4 Hydrogen (XHigh)'],
+ ['model_placeholder_m532','Gemini 4 Neon (High)'],
+ ['model_placeholder_m533','Gemini 4 Neon (Medium)'],
+ ['model_placeholder_m534','Gemini 4 Neon (Low)'],
+ ['model_placeholder_m535','Gemini 4 Neon (XHigh)'],
+ ['model_placeholder_m537','Orchestrator (Neon)'],
+ ['model_placeholder_m667','Orchestrator (Carbon)'],
+ ['model_placeholder_m681','Orchestrator (Argon)'],
+ ['gemini-pro-orchestrator','Orchestrator (Carbon)'],
+ ['gemini-pro-orchestrator-carbon','Orchestrator (Carbon)'],
+ ['gemini-pro-orchestrator-argon','Orchestrator (Argon)'],
+ ['gemini-pro-orchestrator-neon','Orchestrator (Neon)'],
+ ['gemini-pro-orchestrator-hydrogen','Orchestrator (Hydrogen)'],
 ]);
 // Placeholder aliases above were checked against the installed host's model
-// catalog on 2026-10-14. Unknown placeholders stay unknown, not a family guess.
+// catalog. Unknown placeholders stay unknown, not a family guess.
 const capEffort=value=>value==='xhigh'?'XHigh':value[0].toUpperCase()+value.slice(1);
 function identify(model){
  if(typeof model!=='string')return null;
@@ -19,9 +48,13 @@ function identify(model){
  const normalized=name.toLowerCase().replace(/(\d)[._-](\d)/g,'$1.$2').replace(/[\s()_]+/g,'-').replace(/-+$/,'');
  let match=normalized.match(/^gemini-3\.8-flash(?:-(n|xhigh|max|high|medium|low))?$/);
  if(match)return {key:'gemini-3.8-flash',display:'Gemini 3.8 Flash'+(match[1]&&match[1]!=='n'?` (${capEffort(match[1])})`:'')};
+ match=normalized.match(/^gemini-4-(neon|carbon|argon|hydrogen)(?:-(n|xhigh|max|high|medium|low))?$/);
+ if(match)return {key:null,display:`Gemini 4 ${capEffort(match[1])}`+(match[2]&&match[2]!=='n'?` (${capEffort(match[2])})`:'')};
+ match=normalized.match(/^orchestrator-(neon|carbon|argon|hydrogen)$/);
+ if(match)return {key:null,display:`Orchestrator (${capEffort(match[1])})`};
  match=normalized.match(/^claude-(sonnet|opus)-(4\.6|5\.5)(?:-(thinking|max|xhigh|high|medium|low))?(?:-\d{8})?$/);
  if(match)return {key:`claude-${match[1]}-${match[2]}`,display:`Claude ${match[1][0].toUpperCase()+match[1].slice(1)} ${match[2]}`+(match[3]?` (${capEffort(match[3])})`:'')};
- match=normalized.match(/^gpt-oss-120b(?:-(xhigh|max|high|medium|low))?$/);
+ match=normalized.match(/^gpt-oss-120b(?:-(?:maas|(xhigh|max|high|medium|low)))?$/);
  if(match)return {key:'gpt-oss-120b',display:'GPT-OSS 120B'+(match[1]?` (${capEffort(match[1])})`:'')};
  return {key:null,display:name};
 }

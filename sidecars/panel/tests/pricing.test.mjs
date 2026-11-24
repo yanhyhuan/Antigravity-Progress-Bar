@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import {
   PricingService,
   resolveModelPricing,
@@ -11,6 +12,8 @@ import {
   normalizeKey,
   BUILTIN_MODELS
 } from '../pricing.mjs';
+
+const createSharedPricing = createRequire(import.meta.url)('../../../compat/pricing.cjs');
 
 test('normalizeKey handles prefixes, suffixes, qualifiers, and punctuation consistently', () => {
   assert.equal(normalizeKey('google/gemini-3.8-flash-n'), 'gemini-3.8-flash');
@@ -95,4 +98,40 @@ test('PricingService restores lastExchangeRate from cache when offline and dispo
   assert.ok(snapshot.models['custom/ultra-gemini-4']);
   service.dispose();
   assert.equal(service.disposed, true);
+});
+
+test('compat/pricing.cjs enforces 5-step Orchestrator pool precedence and normalizes 2.34 effort tiers', () => {
+  const shared = createSharedPricing();
+  assert.equal(shared.quotaFamily('Gemini 4 Argon (High)'), 'gemini-argon');
+  assert.equal(shared.quotaFamily('Orchestrator Gemini 4 Argon'), 'gemini-argon');
+  assert.equal(shared.quotaFamily('Orchestrator Gemini 4 Neon (XHigh)'), 'gemini');
+  assert.equal(shared.quotaFamily('Orchestrator Claude Opus 5.5 (Max)'), '3p');
+  assert.equal(shared.quotaFamily('Orchestrator GPT-OSS 120B'), '3p');
+  assert.equal(shared.quotaFamily('Orchestrator'), 'gemini');
+  assert.equal(shared.quotaFamily('deepseek-r1'), null);
+
+  const aliases = shared.buildShortAliases(['Gemini 4 Neon (XHigh)', 'Claude Opus 5.5 (Max)']);
+  const opus = shared.parseModelTier('Orchestrator Claude Opus 5.5 (Max)', aliases);
+  assert.equal(opus.fullName, 'Claude Opus 5.5');
+  assert.equal(opus.baseDisplay, 'Claude Opus 5.5');
+  assert.equal(opus.canonicalKey, 'claude opus 5.5');
+  assert.equal(opus.tier, 'Orchestrator · Max');
+
+  const sonnet = shared.parseModelTier('Claude Sonnet 5.5 (Max Thinking)', aliases);
+  assert.equal(sonnet.fullName, 'Claude Sonnet 5.5');
+  assert.equal(sonnet.tier, 'Max · Thinking');
+
+  const neon = shared.parseModelTier('Orchestrator (Neon)', aliases);
+  assert.equal(neon.fullName, 'Gemini 4 Neon');
+  assert.equal(neon.name, 'Neon');
+  assert.equal(neon.tier, 'Orchestrator');
+
+  const fin = shared.computeOverviewFinance({
+    today: '2026-11-20',
+    totalTokens: 1000,
+    days: [{ date: '2026-11-20', models: { 'Gemini 4 Neon (XHigh)': { uncached: 500, cacheRead: 500, cacheWrite: 0, output: 0, total: 1000, requests: 1 } } }],
+    quotaWindows: { 'gemini:weekly': { observedTokens: 1000, estimatedFullUsd: 97.5, requests: 10, usedFraction: 0.2 } },
+  });
+  assert.equal(fin.estWeeklyUsd, 97.5);
+  assert.equal(fin.weeklyEst?.totalUsd, 97.5);
 });

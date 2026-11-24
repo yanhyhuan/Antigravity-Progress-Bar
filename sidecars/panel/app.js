@@ -21,6 +21,7 @@ const tokUnit=n=>n===1?'tok':'toks';
 const compactDetail=n=>{if(typeof n!=='number'||!Number.isFinite(n))return '—';for(const [base,suffix,nextBase,nextSuffix]of [[1e12,'T',0,''],[1e9,'B',1e12,'T'],[1e6,'M',1e9,'B'],[1e3,'K',1e6,'M']])if(n>=base){const scaled=n/base,rounded=Number(scaled.toFixed(scaled<10?2:1));return nextBase&&rounded*base>=nextBase?`1${nextSuffix}`:`${rounded}${suffix}`;}return String(n);};
 const chips = [...document.querySelectorAll('[data-card]')];
 let snapshot = null, selectedGroup = null, group = null, autoGroupId = null, lastModelSig = null;
+let lastQuotaUsageAccount = null; const lastQuotaWindowUsage = new Map();
 let pending = false, timer = null, serverOffset = 0, lastExpiredRefresh = 0;
 let selectedCard='speed',cardMotion=null;
 let refreshRequest=null,manualRequest=null;
@@ -116,7 +117,25 @@ function renderQuota(window, prefix, now = Date.now() + serverOffset) {
   hidden(`${prefix}-note`, !unavailableNote);
   const usageRow = $(`${prefix}-usage`);
   if (usageRow) {
-    const winUsage = group?.id && !bucket?.disabled && bucket?.available ? snapshot?.usage?.quotaWindows?.[`${group.id}:${window}`] : null;
+    const usageAccount = snapshot?.usage?.activeAccountKey ?? null;
+    if (snapshot?.usage && usageAccount !== lastQuotaUsageAccount) { lastQuotaUsageAccount = usageAccount; lastQuotaWindowUsage.clear(); }
+    const winKey = group?.id ? `${group.id}:${window}` : null;
+    const resetMs = typeof bucket?.resetAt === 'string' ? Date.parse(bucket.resetAt) : NaN;
+    const resetMinute = Number.isFinite(resetMs) ? Math.round(resetMs / 60000) : null;
+    const rawWinUsage = winKey && !bucket?.disabled && bucket?.available ? snapshot?.usage?.quotaWindows?.[winKey] : null;
+    let winUsage = rawWinUsage && typeof rawWinUsage.observedTokens === 'number' && rawWinUsage.observedTokens > 0 ? rawWinUsage : null;
+    if (winKey && winUsage) {
+      lastQuotaWindowUsage.set(winKey, { resetMinute, usage: winUsage });
+    } else if (winKey && !bucket?.disabled && bucket?.available && (snapshot?.usage?.summaryStale === true || !snapshot?.usage) && resetMinute !== null) {
+      const prev = lastQuotaWindowUsage.get(winKey);
+      if (prev && prev.resetMinute !== null && Math.abs(prev.resetMinute - resetMinute) <= 2) {
+        const usedFrac = typeof remaining === 'number' ? Math.max(0, Math.min(1, 1 - remaining)) : null;
+        const estFull = prev.usage.estimatedFullTokens ?? (prev.usage.observedTokens > 0 && usedFrac !== null && usedFrac >= 0.05 ? Math.round(prev.usage.observedTokens / usedFrac) : null);
+        winUsage = { ...prev.usage, estimatedFullTokens: estFull };
+      }
+    } else if (winKey && snapshot?.usage && snapshot.usage.summaryStale !== true) {
+      lastQuotaWindowUsage.delete(winKey);
+    }
     const showUsage = Boolean(winUsage && typeof winUsage.observedTokens === 'number' && winUsage.observedTokens > 0);
     hidden(`${prefix}-usage`, !showUsage);
     if (showUsage) {
@@ -377,6 +396,7 @@ function render() {
   $('health-note').classList.toggle('warning', snapshot.connection !== 'live' || !!snapshot.sessionError || collectionLimited);
   const integration = snapshot.integration;
   const integrationKey = !integration || ['mounted','disabled'].includes(integration.state) ? ''
+    : integration.reason === 'remote-hub' ? 'panelRemoteHub'
     : integration.reason === 'debug-port-disabled' ? (integration.launchConfigured ? 'panelDebugPortReady' : 'panelDebugPortManual') : 'panelInlineReconnecting';
   $('integration-note').textContent = integrationKey ? t(integrationKey) : '';
   updateCountdowns();

@@ -27,6 +27,12 @@ Python 3.10+ 仅用于生命周期，无 pip 依赖；后台使用宿主 Node，
 
 ## Antigravity 自带 IDE
 
+2026-11-25 / **v0.9.16（同步上游 v0.9.11–v0.9.16+ 并完整保留本仓增强特性）**：
+- **连接发现、抗 403 误拉黑与远程 SSH/WSL Hub 适配**：新增 Antigravity `2.34.0+` 守护进程发现文件（`~/.gemini/antigravity/daemon/{ls,hub}_*.json`，防符号链接并校验同 UID 与 PID/端口归属）与无头远程 SSH/WSL Hub 识别（远程环境不误写本地启动快捷方式，侧边面板给出明确提示并保持统计正常），同时保留本机 HTTPS loopback Connect-RPC 兜底；已验证健康的 sidecar 端点遇到单接口 HTTP `403` 时标记为 `RPC_RESTRICTED`（不清空端点或拉黑凭据，补充英/简/繁三语提示）并自动回退至 `TranscriptReader.readMetrics` 流式统计 `2.34.0` `transcript.jsonl` Token；`compat/runtime-ui.mjs` 与 `compat/inline-widget.cjs` 在桥接 15s 超时、队列满（`inflight >= 8`）或单次 5s CDP 心跳超时时保持状态条常驻不消失，冷启动未水合阶段显示「连接 Antigravity… / 读取额度…」。
+- **持久化增量 SQLite 用量索引（含 120 天 24 小时分时桶）与防 OOM 保护**：引入 `.usage-index-v1.sqlite`（`SCHEMA_VERSION = '2-hours-v1'`）替代全量内存聚合，原生存储、时区重算并输出本仓专属的 **120 天 24 小时逐时桶**（`day.hours[0..23]`、`hoursFrom`、`1.5 MiB` 预算裁剪）；主线程 `maxWaitMs: 350` 与 `busy_timeout: 250ms` 防阻塞，多文件（`> 16`）汇总与脏文件自动下放后台 worker，为 `MetricsStore.sessions`（上限 32）与 `TrajectoryReader`（8 MiB / 4 项）补齐优先保护运行中 `RUNNING` 会话的 LRU 淘汰及 128 MiB 堆水位反压，并移除 `sidecar.json` / `ide/extension.cjs` 的 `--max-old-space-size=192` 硬崩溃上限。
+- **混合额度满额估算（USD 成本空间校准）、极简折叠状态条与彩色双币种看板增强**：新增 `QuotaEstimator` 与桌面/IDE 共用的 `compat/pricing.cjs`，在官方 API 美元成本空间同步估算 5h/周满额容量（`observedCostUsd` / `estimatedFullUsd`）并在概览新增第 5 张「预测周额度」（`≈$...USD` / 人民币折算）卡片，修正跨厂商 `Orchestrator <自定义模型>`（如 `Orchestrator Claude Opus ...` 归入 `3p`）的额度池路由；支持状态条一键切换「完整栏 / 极简栏（`< ○ 47%`，最窄 24px）」并与 **3D 奶龙** 悬浮卡避让联动；在**完整保留本仓彩色堆叠柱状图、24 小时视图、OpenRouter 人民币 `¥` / 美元 `$` 实时汇率计费、组件过滤、`Alt+Click` 独显、`<0.1%` 折叠与柱体下钻**的基础上，融合同模型思考档位与 Orchestrator 代号自动合并（多档位行悬停显示档位占比明细）及 `K/M/B/T` 紧凑表格单位（未采用上游 v0.9.8 删宠或 v0.9.15 单色冰山图改版）。
+- **Windows 快捷方式全语系兼容、独立 IDE VSIX 修复与 `agy` CLI 全面升级**：Windows 启动入口发现兼容 Known Folder 重定向桌面/开始菜单与 `OneDrive*\Desktop`，PowerShell stdin 采用纯 ASCII `\uXXXX` 转义并通过 ASCII 临时文件写入 `.lnk` 快捷方式以兼容全部系统区域设置；修复独立 IDE VSIX 遗漏 `compat/host-theme.mjs` 启动退出的问题（一并打包 `compat/pricing.cjs`、`usage-index.mjs`、`quota-estimator.mjs`、`pricing.mjs`，并在 `tests/test_ide.py` 增加全量相对导入扫描与 Node ESM 实机加载门禁）；保留 **Windows 任务完成通知钩子**（`hooks/`、`sounds/`、`notify-settings.json`）；全面升级 `agy` CLI 状态栏（响应式会话 Token、缓存率、估算 `≈ t/s`、花费、`本轮/上轮` 小结、单向哈希本地账本、`#usage`/`#用量` 零额度本地 hook、`manage.py usage-cli`、Termux `android` 兼容、旧版控制台自动 ASCII 回退、`.cmd` 轻量启动器与 `--doctor`）。
+
 2026-11-21 / **v0.9.11（Antigravity Desktop 2.34.0 适配与上游 v0.9.8–v0.9.10 同步）**：
 - **适配 Antigravity Desktop 2.34.0 本地凭据与端口变更**：从 `2.34.0` 起，`language_server` 不再通过命令行参数传递 `--csrf_token`，改为通过环境变量注入，并调整本地日志监听文案为 `listening on loopback port at <N> for local HTTP (SDK/gRPC)` 与 `listening on random port at <N> for HTTPS (gRPC)`。现优先读取宿主 Sidecar SDK 官方注入的 `ANTIGRAVITY_LS_ADDRESS` 与 `ANTIGRAVITY_CSRF_TOKEN`（严格限制 loopback 地址 `127.0.0.1` / `localhost` / `::1` 与有效端口），并在 `401` / `403` 或独立运行模式下自动回退至兼容新旧日志文案的本机进程发现。
 - **适配 2.34.0 Orchestrator 自定义规划模型与思考档位**：新增对 `Orchestrator <自定义模型>`（如 `Orchestrator Claude Opus 5.5 (Max)` 归入 `Claude / GPT` 额度桶、普通 `Orchestrator` 归入 `Gemini` 额度桶）及 `(XHigh)` / `(Max)` / `(Orchestrator)` 档位后缀的额度分组、成本估算和上下文容量识别支持。
@@ -47,7 +53,7 @@ Python 3.10+ 仅用于生命周期，无 pip 依赖；后台使用宿主 Node，
 
 2026-11-17 / **v0.9.1**：项目维护与 App 更新源迁移至 `ATtacK030130/antigrative-dashboard`（保留原有 IDE 扩展标识 `you-should-know-me.antigrative-dashboard-ide` 与本地数据目录）。新增像素猫 / 简约速度卡样式切换、额度消耗速率状态与重置前余量线性预测、当前额度周期实测用量参考、Token 用量「本机全部 / 当前账号」范围切换、以及跟随宿主 Appearance 字体的 `--pulse-font` / `--pulse-font-mono` 同步。已在 Windows 11 本机 **Antigravity Desktop 2.32.2** 通过宿主资源/SDK 检查与插件挂载（`v0.9.1`），并完成 Node 482/483（1 skip）、IDE 67/67、Python 95/95（1 skip）及 Edge CDP 端到端浏览器测试。
 
-专用包为 `antigrative-dashboard-ide-0.9.11.vsix`，安装入口与桌面 App 独立。
+专用包为 `antigrative-dashboard-ide-0.9.16.vsix`，安装入口与桌面 App 独立。
 Windows 11 / IDE 2.5.5（VS Code base 1.107.0）已用真实对话验证速率、缓存、上下文、重启历史恢复和窄宽布局。IDE 2.6.0 的控件挂载和真实对话数据已由用户验收；Linux/macOS 的登录后 IDE 界面仍待实机验证。
 Linux/macOS 的 IDE 进程筛选、端口归属、安装打包和 Trusted Types 浏览器 fixture 纳入 CI；登录后的 IDE GUI 仍待实机验收。
 当前仅支持默认用户 profile；私有 Preact/DOM 或 RPC 变化可能需要适配，不能保证未来 IDE 版本无需维护。

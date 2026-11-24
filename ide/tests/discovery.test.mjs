@@ -297,14 +297,23 @@ test('macOS lsof duplicate owners are retained; Electron helpers cannot win a sh
 });
 
 test('IDE process discovery sanitizes PowerShell and ps command failures and timeouts',async()=>{
- const timeoutErr=Object.assign(new Error('Command failed: powershell.exe -NoProfile Get-CimInstance SECRET'),{code:'ETIMEDOUT'});
+ const raw='Command failed: powershell.exe -NoProfile -NonInteractive -Command Get-CimInstance Win32_Process SECRET';
+ for(const timeoutErr of [
+  Object.assign(new Error(raw),{killed:true,signal:'SIGTERM'}),
+  Object.assign(new Error(raw),{code:'ETIMEDOUT'}),
+ ]){
+  await assert.rejects(
+   discoverIdeProcesses(9000,{platform:'win32',run:async()=>{throw timeoutErr;}}),
+   err=>{assert.equal(err.message,'Timed out reading Antigravity IDE processes');assert.doesNotMatch(err.message,/powershell|Get-CimInstance|SECRET/i);return true;},
+  );
+ }
  await assert.rejects(
-  discoverIdeProcesses(9000,{platform:'win32',run:async()=>{throw timeoutErr;}}),
-  err=>err.message==='Timed out reading Antigravity IDE processes'&&!err.message.includes('powershell'),
+  discoverIdeProcesses(9000,{platform:'win32',run:async()=>{throw new Error(raw);}}),
+  err=>{assert.equal(err.message,'Unable to read Antigravity IDE processes');assert.doesNotMatch(err.message,/powershell|Get-CimInstance|SECRET/i);return true;},
  );
- const genericErr=new Error('Command failed: /bin/ps -axww SECRET');
+ const genericPsErr=new Error('Command failed: /bin/ps -axww SECRET');
  await assert.rejects(
-  discoverIdeProcesses(9000,{platform:'darwin',uid:501,run:async()=>{throw genericErr;}}),
-  err=>err.message==='Unable to read Antigravity IDE processes'&&!err.message.includes('/bin/ps'),
+  discoverIdeProcesses(9000,{platform:'darwin',uid:501,run:async()=>{throw genericPsErr;}}),
+  err=>{assert.equal(err.message,'Unable to read Antigravity IDE processes');assert.doesNotMatch(err.message,/\/bin\/ps|SECRET/i);return true;},
  );
 });

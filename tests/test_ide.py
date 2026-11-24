@@ -2,7 +2,12 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import posixpath
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -44,8 +49,8 @@ class IdeTests(unittest.TestCase):
                 pristine = output.read_bytes()
                 checksum = output.with_suffix(output.suffix + '.sha256')
                 original_checksum = checksum.read_bytes()
-                ide_runtime = ('ide/main.mjs', 'ide/runtime.mjs', 'ide/webview-targets.mjs',
-                               'ide/client.mjs', 'ide/discovery.mjs', 'ide/surface.cjs')
+                ide_runtime = ('compat/host-theme.mjs', 'compat/pricing.cjs', 'ide/main.mjs', 'ide/runtime.mjs',
+                               'ide/webview-targets.mjs', 'ide/client.mjs', 'ide/discovery.mjs', 'ide/surface.cjs')
                 for name in publisher.LARGE_CONVERSATION_MODULES + ide_runtime:
                     with self.subTest(package=output.suffix, module=name):
                         removed = prefix + name
@@ -94,6 +99,49 @@ class IdeTests(unittest.TestCase):
             self.assertEqual(output.with_suffix('.vsix.sha256').read_text(encoding='utf-8').split(),
                              [hashlib.sha256(output.read_bytes()).hexdigest(), output.name])
 
+    def test_vsix_resolves_all_relative_imports_and_loads_ide_main_entrypoint(self):
+        rel_pattern = re.compile(
+            r'''(?:from\s+['"](\.\.?/[^'"]+)['"]'''
+            r'''|import\s*\(\s*['"](\.\.?/[^'"]+)['"]\s*\)'''
+            r'''|require\s*\(\s*['"](\.\.?/[^'"]+)['"]\s*\)'''
+            r'''|new\s+URL\s*\(\s*['"](\.\.?/[^'"]+)['"]\s*,\s*import\.meta\.url\s*\))'''
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            temp_path = Path(temporary)
+            output = packager.build(temp_path / 'ide.vsix')
+            extract_dir = temp_path / 'unpacked'
+            with zipfile.ZipFile(output) as archive:
+                archive.extractall(extract_dir)
+                archive_files = set(archive.namelist())
+            ext_root = extract_dir / 'extension'
+            missing = []
+            for entry in sorted(archive_files):
+                if not entry.startswith('extension/') or not entry.endswith(('.mjs', '.cjs')):
+                    continue
+                rel_entry = entry[len('extension/'):]
+                parent = posixpath.dirname(rel_entry)
+                source = (ext_root / rel_entry).read_text(encoding='utf-8')
+                for match in rel_pattern.finditer(source):
+                    spec = next(group for group in match.groups() if group)
+                    target = posixpath.normpath(posixpath.join(parent, spec))
+                    if 'extension/' + target not in archive_files:
+                        missing.append(f'{rel_entry} -> {target}')
+            self.assertEqual(missing, [], f'Missing relative imports in VSIX: {missing}')
+            node = shutil.which('node')
+            if node:
+                env = {k: v for k, v in os.environ.items() if k != 'AG_PULSE_IDE_PROFILE'}
+                proc = subprocess.run(
+                    [node, str(ext_root / 'ide' / 'main.mjs')],
+                    cwd=ext_root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    timeout=15,
+                )
+                self.assertNotIn('ERR_MODULE_NOT_FOUND', proc.stderr)
+                self.assertIn('IDE profile is required', proc.stderr)
+
     def test_missing_runtime_does_not_overwrite_existing_package(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / 'ide.vsix'
@@ -110,8 +158,8 @@ class IdeTests(unittest.TestCase):
         executable.parent.mkdir(parents=True, exist_ok=True)
         executable.write_bytes(b'fixture')
         (app / 'out').mkdir(parents=True)
-        (app / 'out/cli.js').write_text('// fixture')
-        (app / 'product.json').write_text(json.dumps({'applicationName': identity}))
+        (app / 'out/cli.js').write_text('// fixture', encoding='utf-8')
+        (app / 'product.json').write_text(json.dumps({'applicationName': identity}), encoding='utf-8')
         return executable, app
 
     def test_installer_verifies_host_and_preserves_argument_paths(self):
