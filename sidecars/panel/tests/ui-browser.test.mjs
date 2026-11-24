@@ -1139,6 +1139,57 @@ test('font sync, scope switching and quota window reference render end-to-end in
   assert.equal(frameRetention.minPixelsDuringUnready, frameRetention.beforePixels, 'Canvas must retain exact painted frame without flashing blank while atlas is unready');
   assert.ok(frameRetention.skippedDelta >= 1, 'Unready atlas ticks should increment skippedUnreadyCount');
   assert.equal(frameRetention.resumedPainting, true, 'Canvas animation must resume advancing once atlas source is ready again');
+
+  // 3g. Rim-Patrol Walk (position() -> ensureLoop() inside tickAnimation) must NEVER fork-bomb rAF or speed up playback > 1x
+  const patrolLoopCheck = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const patrolBtn = host.shadowRoot.querySelectorAll('.menu .m-btn')[3];
+    patrolBtn.click();
+    await window.__nextFrame();
+    const startedWalking = dbg.state.walking;
+    const ticks0 = dbg.state.tickCount;
+    let walkVsyncs = 0, countingWalk = true;
+    const countWalk = () => { if (!countingWalk) return; walkVsyncs++; requestAnimationFrame(countWalk); };
+    requestAnimationFrame(countWalk);
+    await new Promise(r => setTimeout(r, 420));
+    countingWalk = false;
+    const walkTickDelta = dbg.state.tickCount - ticks0;
+    const midWalkX = dbg.state.walkX;
+    // Switch to eat action (cancels walk cleanly) and verify 1x steady cadence afterward
+    const eatBtn = host.shadowRoot.querySelectorAll('.menu .m-btn')[0];
+    eatBtn.click();
+    await window.__nextFrame();
+    const ticks1 = dbg.state.tickCount;
+    const paints1 = dbg.state.paintCount;
+    const startFrameIdx = Number((dbg.state.lastPaintSig || '').split('|')[1] || 0);
+    let postVsyncs = 0, countingPost = true;
+    const countPost = () => { if (!countingPost) return; postVsyncs++; requestAnimationFrame(countPost); };
+    requestAnimationFrame(countPost);
+    await new Promise(r => setTimeout(r, 500));
+    countingPost = false;
+    const postTickDelta = dbg.state.tickCount - ticks1;
+    const postPaintDelta = dbg.state.paintCount - paints1;
+    const endFrameIdx = Number((dbg.state.lastPaintSig || '').split('|')[1] || 0);
+    const frameAdvance = (endFrameIdx - startFrameIdx + 64) % 64;
+    return {
+      startedWalking,
+      walkVsyncs,
+      walkTickDelta,
+      midWalkX,
+      postVsyncs,
+      postTickDelta,
+      postPaintDelta,
+      frameAdvance,
+    };
+  }`);
+  assert.equal(patrolLoopCheck.startedWalking, true, 'Patrol action should start rim-patrol walking');
+  assert.ok(patrolLoopCheck.walkTickDelta <= patrolLoopCheck.walkVsyncs + 2, `Rim-patrol must run at most 1 tickAnimation per VSync (got ${patrolLoopCheck.walkTickDelta} ticks in ${patrolLoopCheck.walkVsyncs} VSyncs)`);
+  if (patrolLoopCheck.walkVsyncs >= 4) {
+    assert.ok(patrolLoopCheck.midWalkX < 0 && patrolLoopCheck.midWalkX > -95, `Rim-patrol should walk smoothly at 86px/s, got ${patrolLoopCheck.midWalkX}`);
+  }
+  assert.ok(patrolLoopCheck.postTickDelta <= patrolLoopCheck.postVsyncs + 2, `Post-patrol animation must retain single rAF loop (got ${patrolLoopCheck.postTickDelta} ticks in ${patrolLoopCheck.postVsyncs} VSyncs)`);
+  assert.ok(patrolLoopCheck.postPaintDelta <= patrolLoopCheck.postVsyncs + 2 && patrolLoopCheck.frameAdvance <= 16, `Post-patrol clip must play at 1x ~17fps, got paintDelta=${patrolLoopCheck.postPaintDelta}, frameAdvance=${patrolLoopCheck.frameAdvance}`);
   } finally {
     try { cdp?.close(); } catch {}
     killBrowser(child);

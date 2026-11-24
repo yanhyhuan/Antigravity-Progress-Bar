@@ -447,11 +447,12 @@ module.exports = function installAgPulseInlineWidget() {
     let host=null,shadow=null,stage=null,canvas=null,ctx=null,backCanvas=null,backCtx=null,actor=null,sparks=null,bubble=null,bTextEl=null,menuEl=null,tuckBtnLbl=null;
     let enabled=true,shown=false,everShown=false,lastHiddenAt=0,tucked=localGet('ag-pulse-nailong-v3-tucked')==='1',curComp=null,curBar=null,curData=null;
     let hideTimer=null,showDelayTimer=null,holdTimer=null,bubbleTimer=null,sleepTimer=null,zzzTimer=null,patrolIdleTimer=null,rafId=null,dpr=2;
+    let loopGen=0,inTick=false,tickCount=0,lastFinishCelebrateAt=0,lastSyncedConvId=null;
     let lastPaintSig='',paintCount=0,skippedUnreadyCount=0,showToggleCount=0,lastActorH=-1,lastActorBottom=-1,lastStageLeft='',lastStageTop='',lastStageTheme='';
     let pointerDown=false,gestureMode='none',downX=0,downY=0,lastX=0,lastY=0,startPeek=0,dragPeekVal=0,petTravel=0,nextSparkAt=46;
     let hovered=false,menuOpen=false,lastTypeAt=0,typeDir=1,typeImpulse=0,boundEditor=null;
     let sleeping=false,walking=false,walkX=0,walkTargetX=0,walkState='out',walkPauseUntil=0,facing=1,wasRunning=false,moveIndex=0,lastClickAt=0,transientText='';
-    let activeShow=null,lastTs=0;
+    let activeShow=null,lastTs=null;
     const cursors={wave:0,peek:0,work:0,eat:0,dance:0,sleep:0};
     const dirs={wave:1,peek:1,work:1,eat:1,dance:1,sleep:1};
     const phys={
@@ -470,9 +471,13 @@ module.exports = function installAgPulseInlineWidget() {
     const isRunningNow=()=>/RUNNING/i.test(String(curData?.speed?.status||''));
     const damp=(cur,target,lambda,dt)=>target+(cur-target)*Math.exp(-lambda*dt);
     const springStep=(val,vel,target,stiff,damping,dt)=>{
-      const f=(target-val)*stiff-vel*damping;
-      const nv=vel+f*dt;
-      return [val+nv*dt,nv];
+      const steps=dt>0.017?Math.min(4,Math.ceil(dt/0.016)):1,h=dt/steps;
+      let x=val,v=vel;
+      for(let i=0;i<steps;i++){
+        v+=((target-x)*stiff-v*damping)*h;
+        x+=v*h;
+      }
+      return [x,v];
     };
     const smoothstep=(e0,e1,x)=>{
       const t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));
@@ -771,152 +776,170 @@ module.exports = function installAgPulseInlineWidget() {
         paintCount++;
       }
     };
-    const tickAnimation=ts=>{
+    const cancelLoop=()=>{
+      loopGen++;
+      if(rafId!==null){cancelAnimationFrame(rafId);rafId=null;}
+      lastTs=null;
+    };
+    const tickAnimation=(ts,gen)=>{
+      if(gen!==loopGen)return;
       rafId=null;
-      if(!shown||document.hidden||!canvas||!ctx)return;
-      const dt=lastTs?Math.min(0.05,Math.max(0.001,(ts-lastTs)/1000)):0.016;
+      if(!shown||document.hidden||!canvas||!ctx){lastTs=null;return;}
+      if(lastTs!==null&&ts<=lastTs){
+        rafId=requestAnimationFrame(nextTs=>tickAnimation(nextTs,gen));
+        return;
+      }
+      const dt=lastTs!==null?Math.min(0.05,(ts-lastTs)/1000):0.016;
       lastTs=ts;
+      tickCount++;
       const reduced=densityMedia.matches;
-
-      // 1. Rim-Patrol Walk along top border of chat input box
-      if(walking){
-        if(tucked||gestureMode!=='none'){
-          stopWalk(false);
-        }else if(walkState==='out'){
-          walkX=Math.max(walkTargetX,walkX-86*dt);
-          phys.walkBob+=dt*14;
-          position();
-          if(walkX<=walkTargetX+0.5){
-            walkState='pause';
-            walkPauseUntil=ts+1250;
-            cursors.wave=0;
-            spawnParticles(3,'star');
-          }
-        }else if(walkState==='pause'){
-          if(ts>=walkPauseUntil){
-            facing=-1;
-            walkState='back';
-          }
-        }else{
-          walkX=Math.min(0,walkX+96*dt);
-          phys.walkBob+=dt*15;
-          position();
-          if(walkX>=-0.5){
-            walkX=0;facing=1;walking=false;
+      inTick=true;
+      try{
+        // 1. Rim-Patrol Walk along top border of chat input box
+        if(walking){
+          if(tucked||gestureMode!=='none'){
+            stopWalk(false);
+          }else if(walkState==='out'){
+            walkX=Math.max(walkTargetX,walkX-86*dt);
+            phys.walkBob+=dt*14;
             position();
-            spawnParticles(2,'heart');
-          }
-        }
-      }
-
-      // 2. Smooth 60 FPS spring for vertical drag-down (to rim-cling) & drag-up (to restore)
-      if(gestureMode==='dragPeek'){
-        phys.peek=damp(phys.peek,dragPeekVal,28,dt);
-        phys.peekV=0;
-      }else{
-        const targetPeek=tucked?1:0;
-        [phys.peek,phys.peekV]=springStep(phys.peek,phys.peekV,targetPeek,210,22,dt);
-      }
-      syncActorHitBox();
-
-      if(typeImpulse>0.001)typeImpulse=damp(typeImpulse,0,12,dt);
-
-      // 3. Determine active full-body clip & physical modifiers
-      const running=isRunningNow();
-      let bodyClip='wave',playbackRate=hovered?1.15:0.92;
-      let targetSqX=1+typeImpulse*0.05,targetSqY=1-typeImpulse*0.048;
-      let targetJumpY=-typeImpulse*5.0;
-      let targetTilt=typeImpulse*typeDir*0.06;
-      let bodyRot=0,spinCenter=false;
-
-      if(running&&!activeShow){
-        bodyClip='work';
-        playbackRate=1.12;
-      }else if(sleeping&&!activeShow){
-        bodyClip='sleep';
-        playbackRate=0.90;
-      }
-
-      const walkingMoving=Boolean(walking&&walkState!=='pause');
-      if(walkingMoving){
-        bodyClip='dance';
-        playbackRate=1.25;
-        targetJumpY+=-Math.abs(Math.sin(phys.walkBob))*3.8;
-        targetTilt+=Math.sin(phys.walkBob)*0.055;
-      }else if(walking&&walkState==='pause'){
-        bodyClip='wave';
-        playbackRate=1.15;
-      }
-
-      if(activeShow){
-        const elapsed=(ts-activeShow.start)/1000;
-        const total=(activeShow.end-activeShow.start)/1000;
-        const u=Math.min(1,Math.max(0,elapsed/total));
-        const k=activeShow.kind;
-        if(u>=1){
-          activeShow=null;
-          refreshBubble();
-        }else if(k==='eat'||k==='dance'||k==='work'||k==='wave'){
-          bodyClip=k;
-          playbackRate=1.08;
-        }else if(k==='tripleJump'){
-          bodyClip='wave';
-          playbackRate=1.25;
-          const hop=(u*3)%1,hopIdx=Math.floor(u*3);
-          const heights=[13,22,33];
-          const air=Math.sin(Math.PI*hop);
-          targetJumpY=-air*heights[hopIdx];
-          if(hop<0.15||hop>0.88){targetSqX=1.13;targetSqY=0.87;}
-          else{targetSqX=0.93;targetSqY=1.08;}
-        }else if(k==='flip'){
-          bodyClip='dance';
-          playbackRate=1.2;
-          if(u<0.14){
-            const p=u/0.14;
-            targetSqX=1+0.16*p;targetSqY=1-0.14*p;
-          }else if(u<0.84){
-            const p=(u-0.14)/0.70;
-            targetJumpY=-Math.sin(Math.PI*p)*36;
-            bodyRot=p*Math.PI*2;
-            spinCenter=true;
-            targetSqX=0.96;targetSqY=1.04;
+            if(walkX<=walkTargetX+0.5){
+              walkState='pause';
+              walkPauseUntil=ts+1250;
+              cursors.wave=0;
+              spawnParticles(3,'star');
+            }
+          }else if(walkState==='pause'){
+            if(ts>=walkPauseUntil){
+              facing=-1;
+              walkState='back';
+            }
           }else{
-            const p=(u-0.84)/0.16;
-            targetSqX=1+0.14*(1-p);targetSqY=1-0.12*(1-p);
+            walkX=Math.min(0,walkX+96*dt);
+            phys.walkBob+=dt*15;
+            position();
+            if(walkX>=-0.5){
+              walkX=0;facing=1;walking=false;
+              position();
+              spawnParticles(2,'heart');
+            }
           }
-        }else if(k==='peekBounce'){
-          targetSqX=1+Math.sin(elapsed*18)*0.045;
-          targetSqY=1-Math.sin(elapsed*18)*0.042;
-          targetTilt=Math.sin(elapsed*12)*0.05;
         }
+
+        // 2. Smooth 60 FPS spring for vertical drag-down (to rim-cling) & drag-up (to restore)
+        if(gestureMode==='dragPeek'){
+          phys.peek=damp(phys.peek,dragPeekVal,28,dt);
+          phys.peekV=0;
+        }else{
+          const targetPeek=tucked?1:0;
+          [phys.peek,phys.peekV]=springStep(phys.peek,phys.peekV,targetPeek,210,22,dt);
+        }
+        syncActorHitBox();
+
+        if(typeImpulse>0.001)typeImpulse=damp(typeImpulse,0,12,dt);
+
+        // 3. Determine active full-body clip & physical modifiers
+        const running=isRunningNow();
+        let bodyClip='wave',playbackRate=hovered?1.15:0.92;
+        let targetSqX=1+typeImpulse*0.05,targetSqY=1-typeImpulse*0.048;
+        let targetJumpY=-typeImpulse*5.0;
+        let targetTilt=typeImpulse*typeDir*0.06;
+        let bodyRot=0,spinCenter=false;
+
+        if(running&&!activeShow){
+          bodyClip='work';
+          playbackRate=1.12;
+        }else if(sleeping&&!activeShow){
+          bodyClip='sleep';
+          playbackRate=0.90;
+        }
+
+        const walkingMoving=Boolean(walking&&walkState!=='pause');
+        if(walkingMoving){
+          bodyClip='dance';
+          playbackRate=1.25;
+          targetJumpY+=-Math.abs(Math.sin(phys.walkBob))*3.8;
+          targetTilt+=Math.sin(phys.walkBob)*0.055;
+        }else if(walking&&walkState==='pause'){
+          bodyClip='wave';
+          playbackRate=1.15;
+        }
+
+        if(activeShow){
+          const elapsed=(ts-activeShow.start)/1000;
+          const total=(activeShow.end-activeShow.start)/1000;
+          const u=Math.min(1,Math.max(0,elapsed/total));
+          const k=activeShow.kind;
+          if(u>=1){
+            activeShow=null;
+            refreshBubble();
+          }else if(k==='eat'||k==='dance'||k==='work'||k==='wave'){
+            bodyClip=k;
+            playbackRate=1.08;
+          }else if(k==='tripleJump'){
+            bodyClip='wave';
+            playbackRate=1.25;
+            const hop=(u*3)%1,hopIdx=Math.floor(u*3);
+            const heights=[13,22,33];
+            const air=Math.sin(Math.PI*hop);
+            targetJumpY=-air*heights[hopIdx];
+            if(hop<0.15||hop>0.88){targetSqX=1.13;targetSqY=0.87;}
+            else{targetSqX=0.93;targetSqY=1.08;}
+          }else if(k==='flip'){
+            bodyClip='dance';
+            playbackRate=1.2;
+            if(u<0.14){
+              const p=u/0.14;
+              targetSqX=1+0.16*p;targetSqY=1-0.14*p;
+            }else if(u<0.84){
+              const p=(u-0.14)/0.70;
+              targetJumpY=-Math.sin(Math.PI*p)*36;
+              bodyRot=p*Math.PI*2;
+              spinCenter=true;
+              targetSqX=0.96;targetSqY=1.04;
+            }else{
+              const p=(u-0.84)/0.16;
+              targetSqX=1+0.14*(1-p);targetSqY=1-0.12*(1-p);
+            }
+          }else if(k==='peekBounce'){
+            targetSqX=1+Math.sin(elapsed*18)*0.045;
+            targetSqY=1-Math.sin(elapsed*18)*0.042;
+            targetTilt=Math.sin(elapsed*12)*0.05;
+          }
+        }
+
+        if(gestureMode==='rub'){
+          const pushY=Math.max(-10,Math.min(26,lastY-downY));
+          const rub=Math.min(0.085,petTravel*0.00075);
+          targetSqY=Math.max(0.78,Math.min(1.05,1-pushY*0.0055-rub));
+          targetSqX=Math.max(0.95,Math.min(1.22,1/Math.sqrt(targetSqY)));
+          targetTilt=Math.max(-0.14,Math.min(0.14,(lastX-downX)*0.0045));
+        }
+
+        [phys.jumpY,phys.jumpV]=springStep(phys.jumpY,phys.jumpV,targetJumpY,260,21,dt);
+        [phys.sqX,phys.sqXV]=springStep(phys.sqX,phys.sqXV,targetSqX,280,23,dt);
+        [phys.sqY,phys.sqYV]=springStep(phys.sqY,phys.sqYV,targetSqY,280,23,dt);
+        phys.tilt=damp(phys.tilt,targetTilt,16,dt);
+
+        // 4. Paint 2x SSAA Canvas via atomic back-buffer!
+        paintCanvasFrame(bodyClip,playbackRate,dt,reduced,bodyRot,spinCenter);
+
+        if(hovered||gestureMode==='dragPeek'||transientText||menuOpen)updateBubblePos();
+      }finally{
+        inTick=false;
       }
-
-      if(gestureMode==='rub'){
-        const pushY=Math.max(-10,Math.min(26,lastY-downY));
-        const rub=Math.min(0.085,petTravel*0.00075);
-        targetSqY=Math.max(0.78,Math.min(1.05,1-pushY*0.0055-rub));
-        targetSqX=Math.max(0.95,Math.min(1.22,1/Math.sqrt(targetSqY)));
-        targetTilt=Math.max(-0.14,Math.min(0.14,(lastX-downX)*0.0045));
-      }
-
-      [phys.jumpY,phys.jumpV]=springStep(phys.jumpY,phys.jumpV,targetJumpY,260,21,dt);
-      [phys.sqX,phys.sqXV]=springStep(phys.sqX,phys.sqXV,targetSqX,280,23,dt);
-      [phys.sqY,phys.sqYV]=springStep(phys.sqY,phys.sqYV,targetSqY,280,23,dt);
-      phys.tilt=damp(phys.tilt,targetTilt,16,dt);
-
-      // 4. Paint 2x SSAA Canvas via atomic back-buffer!
-      paintCanvasFrame(bodyClip,playbackRate,dt,reduced,bodyRot,spinCenter);
-
-      if(hovered||gestureMode==='dragPeek'||transientText||menuOpen)updateBubblePos();
-      if(!reduced||activeShow||gestureMode!=='none'||Math.abs(phys.peek-(tucked?1:0))>0.004){
-        rafId=requestAnimationFrame(tickAnimation);
+      if(gen!==loopGen||!shown||document.hidden)return;
+      if(!reduced||activeShow||walking||gestureMode!=='none'||Math.abs(phys.peek-(tucked?1:0))>0.004||Math.abs(phys.jumpY)>0.05||Math.abs(phys.jumpV)>0.5||typeImpulse>0.001){
+        if(rafId===null)rafId=requestAnimationFrame(nextTs=>tickAnimation(nextTs,gen));
+      }else{
+        lastTs=null;
       }
     };
     const ensureLoop=()=>{
-      if(rafId===null&&shown&&!document.hidden){
-        lastTs=0;
-        rafId=requestAnimationFrame(tickAnimation);
-      }
+      if(inTick||rafId!==null||!shown||document.hidden)return;
+      lastTs=null;
+      const gen=++loopGen;
+      rafId=requestAnimationFrame(ts=>tickAnimation(ts,gen));
     };
     const ensureHost=()=>{
       if(host?.isConnected)return;
@@ -926,7 +949,7 @@ module.exports = function installAgPulseInlineWidget() {
       host.style.cssText='position:fixed;inset:0 auto auto 0;width:0;height:0;pointer-events:none;z-index:36;';
       host.__agPulseNailongDebug={
         get atlases(){return nailongDecodedAtlases;},
-        get state(){return {shown,stageShown:stage?.dataset.shown==='true',stageHidden:Boolean(stage?.hidden),lastPaintSig,paintCount,skippedUnreadyCount,showToggleCount};},
+        get state(){return {shown,stageShown:stage?.dataset.shown==='true',stageHidden:Boolean(stage?.hidden),walking,walkX,lastPaintSig,paintCount,tickCount,activeLoop:rafId!==null,skippedUnreadyCount,showToggleCount};},
         stepFrame(dt=0.08){paintCanvasFrame(isRunningNow()?'work':'wave',1,dt,false,0,false);},
       };
       shadow=host.attachShadow({mode:'open'});
@@ -1333,7 +1356,7 @@ module.exports = function installAgPulseInlineWidget() {
         lastHiddenAt=performance.now();
         hovered=false;transientText='';setMenuOpen(false);refreshBubble();
         walking=false;walkX=0;facing=1;
-        if(rafId!==null){cancelAnimationFrame(rafId);rafId=null;}
+        cancelLoop();
         stage.dataset.shown='false';
         clearTimeout(holdTimer);clearTimeout(sleepTimer);clearTimeout(patrolIdleTimer);clearInterval(zzzTimer);zzzTimer=null;
         pointerDown=false;gestureMode='none';
@@ -1408,19 +1431,27 @@ module.exports = function installAgPulseInlineWidget() {
       if(lastStageLeft!==leftPx){lastStageLeft=leftPx;stage.style.left=leftPx;}
       if(lastStageTop!==topPx){lastStageTop=topPx;stage.style.top=topPx;}
       if(lastStageTheme!==themeMode){lastStageTheme=themeMode;stage.dataset.theme=themeMode;}
-      if(wasRunning&&!nowRunning&&shown&&!tucked){
-        startShow('tripleJump',1950);
-        spawnParticles(6,'mix');
-        say('任务搞定收工啦 · 快奖励本奶龙一根大鸡腿',2800);
+      if(curData?.speed){
+        if(wasRunning&&!nowRunning&&shown&&!tucked&&curData.connection==='live'){
+          const now=performance.now();
+          if(!lastFinishCelebrateAt||now-lastFinishCelebrateAt>4000){
+            lastFinishCelebrateAt=now;
+            startShow('tripleJump',1950);
+            spawnParticles(6,'mix');
+            say('任务搞定收工啦 · 快奖励本奶龙一根大鸡腿',2800);
+          }
+        }
+        wasRunning=nowRunning;
+      }else if(curData?.connection==='live'){
+        wasRunning=false;
       }
-      wasRunning=nowRunning;
       requestShown(true);
       if(shown)ensureLoop();
       if(hovered||transientText||menuOpen)updateBubblePos();
     };
     const onVisibility=()=>{
       if(document.hidden){
-        if(rafId!==null){cancelAnimationFrame(rafId);rafId=null;}
+        cancelLoop();
       }else if(shown){
         resetSleepIdle();
         ensureLoop();
@@ -1431,15 +1462,26 @@ module.exports = function installAgPulseInlineWidget() {
     return {
       get host(){return host;},
       ownsNode:t=>Boolean(host&&(t===host||host.contains(t))),
-      sync(comp,bar,metrics){curComp=comp||null;curBar=bar||null;if(metrics!==undefined)curData=metrics;bindEditor(comp?.editor||null);position();},
+      sync(comp,bar,metrics){
+        curComp=comp||null;curBar=bar||null;
+        if(metrics!==undefined){
+          const nextConvId=metrics?.speed?.conversationId||null;
+          if(nextConvId&&lastSyncedConvId&&nextConvId!==lastSyncedConvId){
+            wasRunning=/RUNNING/i.test(String(metrics?.speed?.status||''));
+          }
+          if(nextConvId)lastSyncedConvId=nextConvId;
+          curData=metrics;
+        }
+        bindEditor(comp?.editor||null);position();
+      },
       position,
       setEnabled(v){enabled=Boolean(v);position();},
-      detach(){curComp=null;bindEditor(null);requestShown(false);},
+      detach(){curComp=null;wasRunning=false;lastSyncedConvId=null;bindEditor(null);requestShown(false);},
       dispose(){
         document.removeEventListener('visibilitychange',onVisibility);
         document.removeEventListener('pointerdown',onOutsideDown,true);
         bindEditor(null);
-        if(rafId!==null){cancelAnimationFrame(rafId);rafId=null;}
+        cancelLoop();
         clearTimeout(hideTimer);clearTimeout(showDelayTimer);showDelayTimer=null;
         clearTimeout(holdTimer);clearTimeout(bubbleTimer);clearTimeout(sleepTimer);
         clearTimeout(patrolIdleTimer);clearInterval(zzzTimer);
