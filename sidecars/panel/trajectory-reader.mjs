@@ -31,7 +31,7 @@ export class TrajectoryReader {
   evict(false);
  }
  ingestSummaries(all={},keepId=null,endpoint=this.client.server){
-  if(endpoint&&(!this.endpoint||['pid','port','csrf'].some(k=>this.endpoint[k]!==endpoint[k]))){
+  if(endpoint&&(!this.endpoint||['pid','port','csrf','socksPort'].some(k=>this.endpoint[k]!==endpoint[k]))){
    this.reset();this.endpoint=endpoint;
   }
   const source=all&&typeof all==='object'?all:{},entries=Object.entries(source);
@@ -60,7 +60,7 @@ export class TrajectoryReader {
  }
  async ensureEndpoint(){
   const endpoint=await this.client.discover();
-  if(this.endpoint&&['pid','port','csrf'].some(k=>this.endpoint[k]!==endpoint[k]))this.reset();
+  if(this.endpoint&&['pid','port','csrf','socksPort'].some(k=>this.endpoint[k]!==endpoint[k]))this.reset();
   this.endpoint=endpoint;
   return endpoint;
  }

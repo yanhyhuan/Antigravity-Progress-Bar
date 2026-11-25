@@ -1,6 +1,7 @@
 // User-owned desktop launch configuration and host archive inspection.
 import { execFile } from 'node:child_process';
 import { chmod, copyFile, lstat, mkdir, open, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { createConnection } from 'node:net';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, win32 } from 'node:path';
 
@@ -10,6 +11,8 @@ export const DEBUG_ARGS = [DEBUG_PORT_FLAG, DEBUG_ADDRESS_FLAG];
 export const DESKTOP_MANAGED_MARKER = 'X-Antigravity-Pulse-Managed=true';
 export const MACOS_LAUNCHER_NAME = 'Antigravity (Dashboard).app';
 export const MACOS_LAUNCHER_BUNDLE_ID = 'io.github.attack030130.antigrative-dashboard.launcher';
+export const IDE_MACOS_LAUNCHER_NAME = 'Antigravity IDE (Dashboard).app';
+export const IDE_MACOS_LAUNCHER_BUNDLE_ID = 'io.github.attack030130.antigrative-dashboard.ide-launcher';
 export const MACOS_MANAGED_PLIST_KEY = 'XAntigravityPulseManaged';
 
 const archiveCache = new Map();
@@ -194,6 +197,23 @@ export function isAntigravityDesktopShortcut(shortcutPath, info) {
     if (iconName === 'antigravity.exe') return true;
     if (iconName === 'antigravity ide.exe') return false;
     return PROXY_DESKTOP_SHORTCUT_NAMES.has(lnkName);
+  }
+  return false;
+}
+
+export function isAntigravityIdeShortcut(shortcutPath, info) {
+  if (!info || !info.target) return false;
+  const tokens = tokenizeArgs(info.args || '').map(t => stripQuotes(t).toLowerCase());
+  const targetName = win32.basename(info.target).toLowerCase();
+  if (targetName === 'antigravity ide.exe') return true;
+  if (PROXY_LAUNCHER_TARGETS.has(targetName)) {
+    if (tokens.some(t => t === '--ide' || t.startsWith('--ide='))) return true;
+    const rawIcon = info.icon ? String(info.icon).replace(/,-?\d+\s*$/, '') : '';
+    const iconName = rawIcon ? win32.basename(rawIcon).toLowerCase() : '';
+    if (iconName === 'antigravity ide.exe') return true;
+    if (iconName === 'antigravity.exe') return false;
+    const lnkName = win32.basename(shortcutPath).toLowerCase();
+    return lnkName.startsWith('antigravity ide') && lnkName.endsWith('.lnk');
   }
   return false;
 }
@@ -814,4 +834,406 @@ export async function ensureDesktopLaunchConfig({
   }
 
   return { configured: false, repaired: false, supported: false, entrypoints: [] };
+}
+
+function linuxIdeDesktopPaths({ home = homedir(), env = process.env, systemDirs } = {}) {
+  const isRealHome = resolve(home) === resolve(homedir());
+  const dataHome = isRealHome && env.XDG_DATA_HOME ? env.XDG_DATA_HOME : join(home, '.local', 'share');
+  const sysRoots = systemDirs || ['/usr/share/applications', '/usr/local/share/applications'];
+  return {
+    userFile: join(dataHome, 'applications', 'antigravity-ide.desktop'),
+    sysCandidates: sysRoots.map(dir => join(dir, 'antigravity-ide.desktop')),
+  };
+}
+
+function macosIdeLauncherBundle(home = homedir()) {
+  return join(home, 'Applications', IDE_MACOS_LAUNCHER_NAME);
+}
+
+async function macosTargetIdeApp({ appResources, home = homedir(), env = process.env, systemAppDirs } = {}) {
+  const candidates = [];
+  const addFrom = value => {
+    const bundle = macosAppBundle(value);
+    if (bundle && !candidates.includes(bundle)) candidates.push(bundle);
+  };
+  if (appResources) addFrom(appResources);
+  if (env.AG_PULSE_IDE_APP) addFrom(env.AG_PULSE_IDE_APP);
+  const roots = systemAppDirs || ['/Applications', join(home, 'Applications')];
+  for (const root of roots) addFrom(join(root, 'Antigravity IDE.app'));
+  for (const candidate of candidates) {
+    if (!await isRegularDir(candidate)) continue;
+    const exe = join(candidate, 'Contents', 'MacOS', 'Antigravity IDE');
+    const product = join(candidate, 'Contents', 'Resources', 'app', 'product.json');
+    if (await isRegularFile(exe) || await isRegularFile(product)) return candidate;
+  }
+  return null;
+}
+
+export function renderMacosIdeLauncherPlist(iconName = null) {
+  const iconBlock = iconName ? `  <key>CFBundleIconFile</key>\n  <string>${xmlEscape(iconName)}</string>\n` : '';
+  return (
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+    + '<plist version="1.0">\n'
+    + '<dict>\n'
+    + '  <key>CFBundleDevelopmentRegion</key>\n'
+    + '  <string>en</string>\n'
+    + '  <key>CFBundleDisplayName</key>\n'
+    + '  <string>Antigravity IDE (Dashboard)</string>\n'
+    + '  <key>CFBundleExecutable</key>\n'
+    + '  <string>launcher</string>\n'
+    + '  <key>CFBundleIdentifier</key>\n'
+    + `  <string>${IDE_MACOS_LAUNCHER_BUNDLE_ID}</string>\n`
+    + iconBlock
+    + '  <key>CFBundleInfoDictionaryVersion</key>\n'
+    + '  <string>6.0</string>\n'
+    + '  <key>CFBundleName</key>\n'
+    + '  <string>Antigravity IDE (Dashboard)</string>\n'
+    + '  <key>CFBundlePackageType</key>\n'
+    + '  <string>APPL</string>\n'
+    + '  <key>CFBundleShortVersionString</key>\n'
+    + '  <string>1.0</string>\n'
+    + '  <key>LSUIElement</key>\n'
+    + '  <true/>\n'
+    + `  <key>${MACOS_MANAGED_PLIST_KEY}</key>\n`
+    + '  <true/>\n'
+    + '</dict>\n'
+    + '</plist>\n'
+  );
+}
+
+export function renderMacosIdeLauncherScript(targetApp, profileDir = null) {
+  const posixApp = String(targetApp).replace(/\\/g, '/');
+  const profileLine = profileDir
+    ? `PROFILE_DIR=${shQuote(String(profileDir).replace(/\\/g, '/'))}`
+    : 'PROFILE_DIR="${AG_PULSE_IDE_PROFILE:-$HOME/Library/Application Support/Antigravity IDE}"';
+  return [
+    '#!/bin/sh',
+    `# ${DESKTOP_MANAGED_MARKER}`,
+    'set -eu',
+    'unset ELECTRON_RUN_AS_NODE',
+    `APP_BUNDLE=${shQuote(posixApp)}`,
+    profileLine,
+    'if [ ! -d "$APP_BUNDLE" ]; then',
+    '  for candidate in "/Applications/Antigravity IDE.app" "$HOME/Applications/Antigravity IDE.app"; do',
+    '    if [ -d "$candidate" ]; then',
+    '      APP_BUNDLE="$candidate"',
+    '      break',
+    '    fi',
+    '  done',
+    'fi',
+    'if [ ! -d "$APP_BUNDLE" ]; then',
+    '  /usr/bin/osascript -e \'display dialog "Antigravity IDE.app was not found." buttons {"OK"} default button 1 with title "Antigravity IDE (Dashboard)"\' >/dev/null 2>&1 || true',
+    '  exit 1',
+    'fi',
+    'EXE_PATH="$APP_BUNDLE/Contents/MacOS/Antigravity IDE"',
+    'is_running() {',
+    '  /bin/ps -ww -axo pid=,uid=,args= 2>/dev/null | /usr/bin/awk -v uid="$(/usr/bin/id -u)" -v exe="$EXE_PATH" \'',
+    '    $2 == uid && index($0, exe) > 0 && index($0, "Helper") == 0 && $0 !~ /(^|[[:space:]])--type=/ { found = 1; exit 0 }',
+    '    END { exit(found ? 0 : 1) }',
+    '  \'',
+    '}',
+    'has_debug_port() {',
+    '  [ -f "$PROFILE_DIR/DevToolsActivePort" ] && [ ! -L "$PROFILE_DIR/DevToolsActivePort" ] || return 1',
+    '  port="$(/usr/bin/head -n 1 "$PROFILE_DIR/DevToolsActivePort" 2>/dev/null | /usr/bin/tr -d \'\\r\\n\')"',
+    '  case "$port" in',
+    '    \'\'|*[!0-9]*) return 1 ;;',
+    '    *) [ "$port" -ge 1 ] && [ "$port" -le 65535 ] ;;',
+    '  esac',
+    '}',
+    'if is_running; then',
+    '  if has_debug_port; then',
+    '    exec /usr/bin/open -a "$APP_BUNDLE" "$@"',
+    '  fi',
+    '  if ! /usr/bin/osascript <<\'APPLESCRIPT\' >/dev/null 2>&1',
+    'display dialog "Antigravity IDE is already running without remote debugging enabled.\\n\\nQuit and relaunch Antigravity IDE to enable the Antigrative Dashboard inline bar?" buttons {"Cancel", "Quit & Relaunch"} default button "Quit & Relaunch" with title "Antigravity IDE (Dashboard)"',
+    'APPLESCRIPT',
+    '  then',
+    '    exit 0',
+    '  fi',
+    '  /usr/bin/osascript - "$APP_BUNDLE" <<\'APPLESCRIPT\' >/dev/null 2>&1 || true',
+    'on run argv',
+    '  tell application (item 1 of argv) to quit',
+    'end run',
+    'APPLESCRIPT',
+    '  tries=0',
+    '  while is_running && [ "$tries" -lt 40 ]; do',
+    '    /bin/sleep 0.25',
+    '    tries=$((tries + 1))',
+    '  done',
+    '  if is_running; then',
+    '    /usr/bin/osascript -e \'display dialog "Antigravity IDE did not finish quitting. Press Command+Q to quit it, then open Antigravity IDE (Dashboard) again." buttons {"OK"} default button 1 with title "Antigravity IDE (Dashboard)"\' >/dev/null 2>&1 || true',
+    '    exit 1',
+    '  fi',
+    'fi',
+    `exec /usr/bin/open -a "$APP_BUNDLE" --args ${DEBUG_PORT_FLAG} ${DEBUG_ADDRESS_FLAG} "$@"`,
+    '',
+  ].join('\n');
+}
+
+async function recordManagedIdeShortcuts(settingsPath, updates) {
+  if (!settingsPath || !updates.length) return;
+  let settings = {};
+  try { settings = JSON.parse((await readFile(settingsPath, 'utf8')).replace(/^\uFEFF/, '')); } catch {}
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) settings = {};
+  const managed = settings.managedIdeLaunch && typeof settings.managedIdeLaunch === 'object' ? { ...settings.managedIdeLaunch } : {};
+  const tracked = managed.windowsShortcuts && typeof managed.windowsShortcuts === 'object' ? { ...managed.windowsShortcuts } : {};
+  for (const item of updates) {
+    const existing = Array.isArray(tracked[item.path]) ? tracked[item.path].filter(f => DEBUG_ARGS.includes(f)) : [];
+    for (const flag of item.added) if (!existing.includes(flag)) existing.push(flag);
+    tracked[item.path] = existing;
+  }
+  managed.windowsShortcuts = tracked;
+  settings.managedIdeLaunch = managed;
+  await atomicJsonWrite(settingsPath, settings);
+}
+
+export async function inspectIdeLaunch({ platform = process.platform, home = homedir(), env = process.env, resolveKnownFolders } = {}) {
+  if (platform === 'win32') {
+    const entrypoints = [];
+    let allReady = true;
+    for (const lnk of await iterLnkFiles(await windowsShortcutRoots({ home, env, platform, resolveKnownFolders }))) {
+      try {
+        const info = parseLnkBuffer(await readFile(lnk));
+        if (!isAntigravityIdeShortcut(lnk, info)) continue;
+        entrypoints.push(lnk);
+        const { hasPort, hasAddress } = hasDebugFlags(info.args || '');
+        if (!hasPort || !hasAddress) allReady = false;
+      } catch {}
+    }
+    return { configured: entrypoints.length > 0 && allReady, supported: true, entrypoints };
+  }
+  if (platform === 'linux') {
+    const { userFile } = linuxIdeDesktopPaths({ home, env });
+    if (await isLink(userFile)) return { configured: false, supported: true, entrypoints: [] };
+    try {
+      const content = await readFile(userFile, 'utf8');
+      const execLines = content.split(/\r?\n/).filter(line => /^\s*Exec\s*=/.test(line));
+      const configured = execLines.length > 0 && execLines.every(line => line.includes('--remote-debugging-port'));
+      return { configured, supported: true, entrypoints: [userFile] };
+    } catch {
+      return { configured: false, supported: true, entrypoints: [] };
+    }
+  }
+  if (platform === 'darwin') {
+    const bundle = macosIdeLauncherBundle(home);
+    const launcher = join(bundle, 'Contents', 'MacOS', 'launcher');
+    const plist = join(bundle, 'Contents', 'Info.plist');
+    if (await isLink(dirname(bundle)) || await isLink(bundle) || await isLink(launcher) || await isLink(plist)) {
+      return { configured: false, supported: true, entrypoints: [] };
+    }
+    if (!await isRegularFile(launcher) || !await isRegularFile(plist)) {
+      return { configured: false, supported: true, entrypoints: [] };
+    }
+    try {
+      const script = await readFile(launcher, 'utf8');
+      const configured = script.includes('--remote-debugging-port') && script.includes('--remote-debugging-address');
+      return { configured, supported: true, entrypoints: [bundle] };
+    } catch {
+      return { configured: false, supported: true, entrypoints: [] };
+    }
+  }
+  return { configured: false, supported: false, entrypoints: [] };
+}
+
+export async function ensureIdeLaunchConfig({
+  platform = process.platform,
+  home = homedir(),
+  env = process.env,
+  settingsPath,
+  execPowerShell = defaultExecPowerShell,
+  resolveKnownFolders,
+  systemDirs,
+  appResources,
+  profile,
+  systemAppDirs,
+} = {}) {
+  const status = await inspectIdeLaunch({ platform, home, env, resolveKnownFolders });
+  if (status.configured) return { ...status, repaired: false };
+
+  if (platform === 'win32') {
+    const updates = [];
+    const entrypoints = [];
+    for (const lnk of await iterLnkFiles(await windowsShortcutRoots({ home, env, platform, resolveKnownFolders }))) {
+      try {
+        const info = parseLnkBuffer(await readFile(lnk));
+        if (!isAntigravityIdeShortcut(lnk, info)) continue;
+        entrypoints.push(lnk);
+        const merged = mergeDebugArguments(info.args || '');
+        if (merged.added.length) updates.push({ path: lnk, args: merged.args, added: merged.added });
+      } catch {}
+    }
+    if (!updates.length) return { configured: entrypoints.length > 0, repaired: false, supported: true, entrypoints };
+    try {
+      await execPowerShell(updates.map(({ path, args }) => ({ path, args })));
+      await recordManagedIdeShortcuts(settingsPath, updates).catch(() => {});
+      return { configured: true, repaired: true, supported: true, entrypoints };
+    } catch {
+      return { configured: false, repaired: false, supported: true, entrypoints };
+    }
+  }
+
+  if (platform === 'linux') {
+    const { userFile, sysCandidates } = linuxIdeDesktopPaths({ home, env, systemDirs });
+    if (await isLink(userFile) || await isLink(dirname(userFile))) {
+      return { configured: false, repaired: false, supported: true, entrypoints: [] };
+    }
+    let source = null;
+    try {
+      const existing = await readFile(userFile, 'utf8');
+      if (!existing.includes(DESKTOP_MANAGED_MARKER)) {
+        const execLines = existing.split(/\r?\n/).filter(line => /^\s*Exec\s*=/.test(line));
+        const configured = execLines.length > 0 && execLines.every(line => line.includes('--remote-debugging-port'));
+        return { configured, repaired: false, supported: true, entrypoints: [userFile] };
+      }
+      source = existing;
+    } catch {
+      for (const candidate of sysCandidates) {
+        if (await isLink(candidate)) continue;
+        try { source = await readFile(candidate, 'utf8'); break; } catch {}
+      }
+    }
+    if (source === null) return { configured: false, repaired: false, supported: true, entrypoints: [] };
+    const updated = mergeDesktopEntry(source);
+    try {
+      await mkdir(dirname(userFile), { recursive: true });
+      const tmp = `${userFile}.${process.pid}.tmp`;
+      await writeFile(tmp, updated, { encoding: 'utf8', mode: 0o644 });
+      await rename(tmp, userFile);
+      if (settingsPath) {
+        let settings = {};
+        try { settings = JSON.parse((await readFile(settingsPath, 'utf8')).replace(/^\uFEFF/, '')); } catch {}
+        if (!settings || typeof settings !== 'object' || Array.isArray(settings)) settings = {};
+        const managed = settings.managedIdeLaunch && typeof settings.managedIdeLaunch === 'object' ? { ...settings.managedIdeLaunch } : {};
+        managed.linuxDesktopFile = userFile;
+        settings.managedIdeLaunch = managed;
+        await atomicJsonWrite(settingsPath, settings).catch(() => {});
+      }
+      return { configured: true, repaired: true, supported: true, entrypoints: [userFile] };
+    } catch {
+      return { configured: false, repaired: false, supported: true, entrypoints: [] };
+    }
+  }
+
+  if (platform === 'darwin') {
+    const bundle = macosIdeLauncherBundle(home);
+    if (await isLink(dirname(bundle)) || await isLink(bundle)) {
+      return { configured: false, repaired: false, supported: true, entrypoints: [] };
+    }
+    let exists = false;
+    try { await lstat(bundle); exists = true; } catch {}
+    if (exists && !await isManagedMacosLauncher(bundle)) {
+      const launcher = join(bundle, 'Contents', 'MacOS', 'launcher');
+      let configured = false;
+      if (await isRegularFile(launcher)) {
+        try {
+          const script = await readFile(launcher, 'utf8');
+          configured = script.includes('--remote-debugging-port') && script.includes('--remote-debugging-address');
+        } catch {}
+      }
+      return { configured, repaired: false, supported: true, entrypoints: [bundle] };
+    }
+    const targetApp = await macosTargetIdeApp({ appResources, home, env, systemAppDirs });
+    if (!targetApp) return { configured: false, repaired: false, supported: true, entrypoints: [] };
+    const contents = join(bundle, 'Contents');
+    const macosDir = join(contents, 'MacOS');
+    const resourcesDir = join(contents, 'Resources');
+    if (await isLink(contents) || await isLink(macosDir) || await isLink(resourcesDir)) {
+      return { configured: false, repaired: false, supported: true, entrypoints: [] };
+    }
+    try {
+      await mkdir(macosDir, { recursive: true });
+      let iconName = null;
+      const iconSrc = await macosIconSource(targetApp);
+      if (iconSrc) {
+        await mkdir(resourcesDir, { recursive: true });
+        const iconDst = join(resourcesDir, 'app.icns');
+        if (!await isLink(iconDst)) {
+          await copyFile(iconSrc, iconDst);
+          iconName = 'app.icns';
+        }
+      }
+      const plistPath = join(contents, 'Info.plist');
+      const plistTmp = `${plistPath}.${process.pid}.tmp`;
+      await writeFile(plistTmp, renderMacosIdeLauncherPlist(iconName), { encoding: 'utf8', mode: 0o644 });
+      await rename(plistTmp, plistPath);
+
+      const launcherPath = join(macosDir, 'launcher');
+      const launcherTmp = `${launcherPath}.${process.pid}.tmp`;
+      await writeFile(launcherTmp, renderMacosIdeLauncherScript(targetApp, profile), { encoding: 'utf8', mode: 0o755 });
+      await chmod(launcherTmp, 0o755).catch(() => {});
+      await rename(launcherTmp, launcherPath);
+
+      if (settingsPath) {
+        let settings = {};
+        try { settings = JSON.parse((await readFile(settingsPath, 'utf8')).replace(/^\uFEFF/, '')); } catch {}
+        if (!settings || typeof settings !== 'object' || Array.isArray(settings)) settings = {};
+        const managed = settings.managedIdeLaunch && typeof settings.managedIdeLaunch === 'object' ? { ...settings.managedIdeLaunch } : {};
+        managed.macosLauncherApp = bundle;
+        settings.managedIdeLaunch = managed;
+        await atomicJsonWrite(settingsPath, settings).catch(() => {});
+      }
+      return { configured: true, repaired: true, supported: true, entrypoints: [bundle] };
+    } catch {
+      return { configured: false, repaired: false, supported: true, entrypoints: [] };
+    }
+  }
+
+  return { configured: false, repaired: false, supported: false, entrypoints: [] };
+}
+
+function tcpLoopbackProbe(port, { timeoutMs = 400, connect = createConnection } = {}) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return Promise.resolve(false);
+  return new Promise(resolvePromise => {
+    let socket = null;
+    let timer = null;
+    let settled = false;
+    const finish = ok => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket?.destroy();
+      resolvePromise(ok);
+    };
+    timer = setTimeout(() => finish(false), Math.min(2000, Math.max(50, timeoutMs)));
+    timer.unref?.();
+    try {
+      socket = connect({ host: '127.0.0.1', port, family: 4 });
+      socket.once('connect', () => finish(true));
+      socket.once('error', () => finish(false));
+      socket.once('close', () => finish(false));
+      socket.unref?.();
+    } catch {
+      finish(false);
+    }
+  });
+}
+
+// Lightweight loopback TCP liveness check for Electron's DevToolsActivePort file.
+// Distinguishes a live port from a missing file or a stale leftover port after an IDE upgrade.
+export async function probeActiveDebugPort(profile, { timeoutMs = 400, probe = tcpLoopbackProbe } = {}) {
+  if (!profile || typeof profile !== 'string') return { status: 'missing', port: null };
+  const filePath = join(profile, 'DevToolsActivePort');
+  let info;
+  try {
+    info = await lstat(filePath);
+  } catch (error) {
+    return { status: error?.code === 'ENOENT' ? 'missing' : 'invalid', port: null };
+  }
+  if (info.isSymbolicLink() || !info.isFile() || info.size <= 0 || info.size > 1024) {
+    return { status: 'invalid', port: null };
+  }
+  let text;
+  try {
+    text = await readFile(filePath, 'utf8');
+  } catch {
+    return { status: 'invalid', port: null };
+  }
+  if (text.length > 1024) return { status: 'invalid', port: null };
+  const firstLine = text.split(/\r?\n/)[0]?.trim() || '';
+  if (!/^\d{1,5}$/.test(firstLine)) return { status: 'invalid', port: null };
+  const port = Number(firstLine);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return { status: 'invalid', port: null };
+  const alive = await Promise.resolve().then(() => probe(port, { timeoutMs })).catch(() => false);
+  return { status: alive === true ? 'alive' : 'stale', port };
 }

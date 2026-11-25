@@ -6,9 +6,9 @@
 
 Compact inline token throughput, cache hit rate, context window, and quota forecasts right beside the Antigravity model selector — enhanced with **CNY / USD cost analytics**, **24h hourly activity**, **3D Nailoong companion**, and **Windows task completion notifications**.
 
-[![Version 0.9.16](https://img.shields.io/badge/version-0.9.16-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
+[![Version 0.9.18](https://img.shields.io/badge/version-0.9.18-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
 [![Platforms](https://img.shields.io/badge/host-Windows%20%7C%20Linux%20%7C%20macOS-83d8b9?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
-[![Antigravity 2.34.0](https://img.shields.io/badge/Antigravity-2.34.0-c5a0ff?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
+[![Antigravity 2.35.0](https://img.shields.io/badge/Antigravity-2.35.0-c5a0ff?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-d4d9e6?style=flat-square&labelColor=252936)](LICENSE)
 
 [Preview](#preview) · [Features](#features) · [Install](#install) · [Manage & Update](#manage-and-update) · [Task Notifications](#windows-task-notifications) · [IDE & CLI](#standalone-ide-and-cli) · [Metrics & Privacy](#metrics-and-privacy) · [FAQ](#faq)
@@ -46,7 +46,7 @@ Compact inline token throughput, cache hit rate, context window, and quota forec
 - **CNY (`¥`) / USD (`$`) Cost & 24h Usage Dashboard** — Backed by a persistent incremental SQLite index (`.usage-index-v1.sqlite`) for instant O(1)-memory summaries across **All local** traffic or the **Current account**. Includes **Daily**, **Weekly**, and **24-hour Hourly** colored stacked bar views (120 days of hourly buckets), automatic 24h-cached exchange-rate and OpenRouter model pricing sync with offline fallbacks, weekly quota USD/CNY full-capacity KPI card (`≈$...USD`), automatic model thinking-tier merging with hover per-tier breakdown tooltips, `K/M/B/T` compact table formatting, column sorting, component toggles (`Uncached` / `Cache read` / `Output`), `Alt+Click` model isolation, `<0.1%` trace folding, and bar click drill-down.
 - **3D Nailoong Interactive Companion** — Built-in 3D video-atlas mascot perched on the composer rim across all models, featuring hover speech hints, click interactions, drag-down rim-cling, double-click backflips, coding-glasses + laptop animations while tasks are running, and right-click controls. Automatically steps aside for open detail cards, narrow panes, subagent boxes, or modals.
 - **Windows Long-Task Completion Alerts** — Bundled `Stop` hook sends a native Windows toast notification and plays a sound/voice alert when long-running turns finish (default `≥ 30s`) or stop on error, ignoring quick Q&A turns and manual cancellations.
-- **Antigravity `2.34.0+`, Remote SSH/WSL Hub & Oversized Sessions** — Supports `2.34.0+` daemon discovery (`~/.gemini/antigravity/daemon/`), headless Remote SSH/WSL hubs, `RPC_RESTRICTED` HTTP `403` resilience with `transcript.jsonl` streaming fallback, and delegated subagent token aggregation. Oversized trajectories stream through a bounded background SQLite worker without blocking live refreshes.
+- **Antigravity `2.35.0`, Remote-SSH Windows & Oversized Sessions** — Supports live inline strips in Desktop App `(SSH: <host>)` windows (via loopback SOCKS5 + `ssh -T ... sh -s` `stdin` discovery) and standalone IDE Remote-SSH windows, `2.34.0+` / `2.35.0` daemon discovery (`~/.gemini/antigravity/daemon/`), headless Remote SSH/WSL hubs, `RPC_RESTRICTED` HTTP `403` resilience with `transcript.jsonl` streaming fallback, and delegated subagent token aggregation. Oversized trajectories stream through a bounded background SQLite worker without blocking live refreshes.
 - **Built-in UI Languages** — Switch dashboard labels anytime between **English**, **简体中文**, and **繁體中文** at the bottom of the Context card or in the Usage Dashboard header.
 
 ---
@@ -143,7 +143,7 @@ On Windows, the bundled `Stop` hook notifies you when a turn finishes after `min
 
 ### Antigravity Standalone IDE (VSIX)
 
-Download `antigrative-dashboard-ide-0.9.16.vsix` from [Releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases) and select **Install from VSIX…** in the Antigravity IDE Extensions view. Fully quit the IDE and start it with `--remote-debugging-port=0 --remote-debugging-address=127.0.0.1`. See [ide/README.md](ide/README.md) for full setup and rollback details.
+Download `antigrative-dashboard-ide-0.9.18.vsix` from [Releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases) and select **Install from VSIX…** in the Antigravity IDE Extensions view. Supports automatic launch-flag detection and repair (`Antigrative Dashboard: Repair IDE Launch Flags`) as well as Remote-SSH IDE windows; fully quit and reopen the IDE after setup. See [ide/README.md](ide/README.md) for full setup and rollback details.
 
 ### Antigravity CLI (`agy`) Status Line & `#usage` Hook
 

@@ -2,13 +2,24 @@
 // Discovery observes host-owned structure only. It never installs a binding or
 // copies conversation contents, and does not authorize other extension views.
 import {CdpConnection} from '../compat/runtime-ui.mjs';
+import {decodeWebviewRemoteAuthority,parseSshRemoteAuthority} from '../sidecars/panel/ssh-remote.mjs';
 
 const GUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LOOPBACK=new Set(['127.0.0.1','localhost','[::1]']);
 const WORKBENCH='/out/vs/code/electron-browser/workbench/workbench.html';
+const REMOTE_BRIDGE_PATH=/^\/(?:[^/\0\\]+\/)+?\.antigravity-ide-server\/(?:bin\/[a-z0-9._-]+|cli\/servers\/[a-z0-9._-]+\/server)\/extensions\/agy\/bridge\.js$/i;
 const MAX_TARGETS=128,MAX_WORKBENCHES=4,MAX_WRAPPERS=4,MAX_CONTEXTS=16,MAX_FRAMES=64;
 const EXPECTED_PARAMS={extensionView:'true',extensionVariant:'vs-code',useWebSocket:'true',platform:'electron'};
 const origin=u=>u.protocol+'//'+u.host;
+function validWorkspaceUri(value){
+  if(typeof value!=='string'||!value||value.length>2048||/[\0\r\n]/.test(value))return null;
+  try{
+    const u=new URL(value);
+    if(u.protocol==='vscode-remote:')return parseSshRemoteAuthority(u.host)?value:null;
+    if(u.protocol==='file:')return value;
+    return null;
+  }catch{return null;}
+}
 function transport(target,port){
   try{const u=new URL(target.webSocketDebuggerUrl);return u.protocol==='ws:'&&LOOPBACK.has(u.hostname)&&Number(u.port)===port&&!u.username&&!u.password&&u.pathname==='/devtools/page/'+target.id&&!u.search&&!u.hash;}catch{return false;}
 }
@@ -33,12 +44,19 @@ function backendUrl(value){
     return u;
   }catch{return null;}
 }
-function officialBridge(value,root){
+function inspectOfficialBridge(value,root){
   try{
-    const u=new URL(value),path=decodeURIComponent(u.pathname),expected=root+'/extensions/agy/bridge.js';
-    if(u.protocol!=='https:'||u.hostname!=='file+.vscode-resource.vscode-cdn.net'||u.port||u.username||u.password||u.search||u.hash||/[\\\0]/.test(path)||path.split('/').some(p=>p==='.'||p==='..'))return false;
-    return /^\/[a-z]:\//i.test(root)?path.toLowerCase()===expected.toLowerCase():path===expected;
-  }catch{return false;}
+    const u=new URL(value),path=decodeURIComponent(u.pathname);
+    if(u.protocol!=='https:'||u.port||u.username||u.password||u.search||u.hash||/[\\\0]/.test(path)||path.split('/').some(p=>p==='.'||p==='..'))return null;
+    if(u.hostname==='file+.vscode-resource.vscode-cdn.net'){
+      const expected=root+'/extensions/agy/bridge.js';
+      const ok=/^\/[a-z]:\//i.test(root)?path.toLowerCase()===expected.toLowerCase():path===expected;
+      return ok?{remoteAuthority:null,destination:null}:null;
+    }
+    const remote=decodeWebviewRemoteAuthority(u.hostname);
+    if(!remote)return null;
+    return REMOTE_BRIDGE_PATH.test(path)?{remoteAuthority:remote.remoteAuthority,destination:remote.destination}:null;
+  }catch{return null;}
 }
 function flattenFrames(tree){
   const pending=[{tree,parent:null,depth:0}],result=[];
@@ -60,12 +78,25 @@ function agentOverlayProbe(){
   if(bodies.length!==1)return [];
   const body=bodies[0].getBoundingClientRect();if(body.width<80||body.height<60)return [];
   const frames=document.querySelectorAll('iframe.webview');if(frames.length>32)return [];
+  let remoteAuthority=null,workspaceUri=null;
+  try{
+    const cfg=window.vscode?.context?.configuration?.();
+    if(typeof cfg?.remoteAuthority==='string'&&cfg.remoteAuthority.startsWith('ssh-remote+')&&cfg.remoteAuthority.length<=1024){
+      remoteAuthority=cfg.remoteAuthority;
+    }
+    const rawWs=cfg?.workspace?.folderUri||cfg?.workspace?.configPath||cfg?.folderUri;
+    if(typeof rawWs==='string'&&rawWs.length<=2048)workspaceUri=rawWs;
+    else if(rawWs&&typeof rawWs==='object'&&typeof rawWs.scheme==='string'&&typeof rawWs.path==='string'){
+      const auth=typeof rawWs.authority==='string'?rawWs.authority:'';
+      workspaceUri=rawWs.scheme+'://'+auth+rawWs.path;
+    }
+  }catch{}
   const matches=[];
   for(const frame of frames){
     if(!visible(frame))continue;
     const r=frame.getBoundingClientRect();
     if(['left','top','width','height'].some(k=>Math.abs(r[k]-body[k])>3))continue;
-    try{const url=new URL(frame.src);if(frame.parentElement?.id!==url.searchParams.get('id'))continue;matches.push({url:url.href,id:frame.parentElement.id});}catch{}
+    try{const url=new URL(frame.src);if(frame.parentElement?.id!==url.searchParams.get('id'))continue;matches.push({url:url.href,id:frame.parentElement.id,...(remoteAuthority?{remoteAuthority}:{}),...(workspaceUri?{workspaceUri}:{})});}catch{}
   }
   return matches.length===1?matches:[];
 }
@@ -92,8 +123,11 @@ export async function discoverIdeWebviews({targets,workbenches,port,connect=(url
       const observed=await connection.command('Runtime.evaluate',{expression:OVERLAY_PROBE,returnByValue:true});
       const overlays=observed.result?.value;if(observed.exceptionDetails||!Array.isArray(overlays)||overlays.length!==1)continue;
       const overlay=overlays[0],url=wrapperUrl(overlay.url);if(!url||overlay.id!==url.searchParams.get('id'))continue;
+      const workbenchRemote=overlay.remoteAuthority?parseSshRemoteAuthority(overlay.remoteAuthority):null;
+      if(overlay.remoteAuthority&&!workbenchRemote)continue;
+      const workbenchWorkspaceUri=validWorkspaceUri(overlay.workspaceUri);
       const matches=targets.filter(t=>t?.type==='iframe'&&t.url===url.href&&transport(t,port)&&rawById.get(t.id)===t);
-      if(matches.length===1)proofs.push({wrapper:matches[0],workbench,root,url});
+      if(matches.length===1)proofs.push({wrapper:matches[0],workbench,root,url,workbenchRemote,workbenchWorkspaceUri});
     }catch{/* A legacy, loading or unavailable workbench is not a failure. */}
     finally{try{connection?.close();}catch{/* A stale socket must not break native IDE discovery. */}}
     if(Date.now()>=deadline)break;
@@ -120,7 +154,13 @@ export async function discoverIdeWebviews({targets,workbenches,port,connect=(url
         if(!frames.some(f=>f.id===context.auxData.frameId))continue;
         remaining();const observed=await connection.command('Runtime.evaluate',{expression:CONTENT_PROBE,contextId:context.id,returnByValue:true});
         const content=observed.result?.value,source=backendUrl(content?.url);
-        if(observed.exceptionDetails||content?.host!=='antigravity'||!source||!Array.isArray(content.scripts)||content.scripts.length>32||!content.scripts.some(src=>officialBridge(src,proof.root)))continue;
+        if(observed.exceptionDetails||content?.host!=='antigravity'||!source||!Array.isArray(content.scripts)||content.scripts.length>32)continue;
+        const bridgeProof=content.scripts.map(src=>inspectOfficialBridge(src,proof.root)).find(Boolean);
+        if(!bridgeProof)continue;
+        if(proof.workbenchRemote&&bridgeProof.destination&&bridgeProof.destination.toLowerCase()!==proof.workbenchRemote.destination.toLowerCase())continue;
+        const remoteAuthority=proof.workbenchRemote?.remoteAuthority||bridgeProof.remoteAuthority||null;
+        const workspaceUri=validWorkspaceUri(source.searchParams.get('workspaceUri')||source.searchParams.get('workspace'))||proof.workbenchWorkspaceUri||null;
+        const backendPort=Number(source.port);
         // Chromium omits OOPIF descendants from the parent's Page frame tree.
         // Prove the child's parent on its own session, then independently ask
         // the wrapper which exact DOM iframe owns that frame. URL matching alone
@@ -139,7 +179,16 @@ export async function discoverIdeWebviews({targets,workbenches,port,connect=(url
             if(element?.localName!=='iframe'||!Array.isArray(element.attributes)||element.attributes.length>64)continue;
             const attrs=new Map();for(let i=0;i<element.attributes.length;i+=2)attrs.set(element.attributes[i],element.attributes[i+1]);
             if(attrs.get('id')!=='jetski-frame'||attrs.get('src')!==content.url)continue;
-            candidates.push({...raw,ideWebview:true,expectedFrameId:child.id,expectedParentId:context.auxData.frameId,expectedUrl:child.url,workbenchId:proof.workbench.id});
+            candidates.push({
+              ...raw,
+              ideWebview:true,
+              expectedFrameId:child.id,
+              expectedParentId:context.auxData.frameId,
+              expectedUrl:child.url,
+              workbenchId:proof.workbench.id,
+              ...(remoteAuthority?{remoteAuthority,backendPort}:{}),
+              ...(workspaceUri?{workspaceUri}:{}),
+            });
           }catch{/* A navigation during proof construction leaves this candidate unauthorized. */}
           finally{try{childConnection?.close();}catch{}}
         }

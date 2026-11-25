@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { MetricsStore } from './store.mjs';
-import { DesktopUsage } from './usage.mjs';
+import { SessionHistory } from './history.mjs';
+import { DesktopUsage, UsageLedger } from './usage.mjs';
+import { RemoteAppClient, RemoteAppSshRegistry } from './ssh-remote.mjs';
 import { loadSidecarSdk } from './sdk.mjs';
 import { RuntimeUi, makeRendererSource } from '../../compat/runtime-ui.mjs';
 import { agentExecutables, isRemoteHeadlessHost, platformPaths } from '../../compat/platform.mjs';
@@ -25,20 +27,121 @@ const paths=platformPaths();
 const ownership=process.env.ANTIGRAVITY_SIDECAR_WEB_PORT?new SidecarOwner(paths.data):null;
 let settingsCache={},settingsAt=-Infinity;
 const owns=()=>(!ownership||ownership.owns())&&settingsCache.enabled!==false;
-const store = new MetricsStore(undefined,{owns});
-const usage=new DesktopUsage(store,undefined,{host:'app',owns,pricing:true});
-store.onTrajectory=async(scope,id,raw,options={})=>{
+const sharedLedger = new UsageLedger();
+const localStore = new MetricsStore(undefined,{owns});
+const localUsage = new DesktopUsage(localStore,sharedLedger,{host:'app',owns,pricing:true});
+localStore.onTrajectory=async(scope,id,raw,options={})=>{
   const {isCurrent=()=>true}=options;
   if(isCurrent()!==true)return;
-  if((!ownership||await ownership.isOwner())&&isCurrent()===true)return usage.ingestLive(scope,id,raw,{...options,isCurrent});
+  if((!ownership||await ownership.isOwner())&&isCurrent()===true)return localUsage.ingestLive(scope,id,raw,{...options,isCurrent});
 };
-store.onBackgroundResult=(scope,id,file,options)=>usage.ingestDisk(scope,id,file,options);
+localStore.onBackgroundResult=(scope,id,file,options)=>localUsage.ingestDisk(scope,id,file,options);
+const localContext = { key: 'local', store: localStore, usage: localUsage, composerModel: null, lastUsedAt: Date.now(), remote: false };
+const sshRegistry = new RemoteAppSshRegistry();
+const remoteContexts = new Map();
+const MAX_REMOTE_CONTEXTS = 16;
+const REMOTE_IDLE_EVICT_MS = 60000;
+
+const disposeRemoteContext = key => {
+  const ctx = remoteContexts.get(key);
+  if (!ctx) return;
+  remoteContexts.delete(key);
+  try { ctx.usage.dispose(); } catch {}
+  try { ctx.store.dispose(); } catch {}
+};
+
+const pruneRemoteContexts = activeTargets => {
+  const activePorts = new Set();
+  for (const target of Array.isArray(activeTargets) ? activeTargets : []) {
+    try {
+      const p = Number(new URL(target.url).port);
+      if (Number.isInteger(p) && p >= 1 && p <= 65535) activePorts.add(p);
+    } catch {}
+  }
+  const now = Date.now();
+  for (const [port, ctx] of remoteContexts) {
+    if (!activePorts.has(port) && now - ctx.lastUsedAt >= REMOTE_IDLE_EVICT_MS) {
+      disposeRemoteContext(port);
+    }
+  }
+};
+
+const isKnownLocalPort = port => {
+  if (!Number.isInteger(port)) return false;
+  const server = localStore.client?.server;
+  if (!server) return false;
+  if (server.port === port || server.httpsPort === port) return true;
+  return Array.isArray(server.ports) && server.ports.includes(port);
+};
+
+const getOrCreateRemoteContext = windowPort => {
+  let ctx = remoteContexts.get(windowPort);
+  if (ctx) {
+    ctx.lastUsedAt = Date.now();
+    return ctx;
+  }
+  while (remoteContexts.size >= MAX_REMOTE_CONTEXTS) {
+    let oldestKey = null, oldestAt = Infinity;
+    for (const [key, item] of remoteContexts) {
+      if (item.lastUsedAt < oldestAt) { oldestAt = item.lastUsedAt; oldestKey = key; }
+    }
+    if (oldestKey === null) break;
+    disposeRemoteContext(oldestKey);
+  }
+  const remoteClient = new RemoteAppClient({ windowPort, registry: sshRegistry });
+  // Remote contexts never scan local disk transcripts or local conversation archives.
+  const remoteStore = new MetricsStore(remoteClient, {
+    history: new SessionHistory(join(paths.data, 'history-v1')),
+    transcripts: null,
+    owns,
+  });
+  const remoteUsage = new DesktopUsage(remoteStore, sharedLedger, {
+    host: null,
+    discoverLocal: async () => ({ conversations: [], errors: 0 }),
+    owns,
+    disposeLedger: false,
+    pricing: localUsage.pricing,
+  });
+  remoteStore.onTrajectory = async (scope, id, raw, options = {}) => {
+    const { isCurrent = () => true } = options;
+    if (isCurrent() !== true) return;
+    if ((!ownership || await ownership.isOwner()) && isCurrent() === true) {
+      return remoteUsage.ingestLive(scope, id, raw, { ...options, isCurrent });
+    }
+  };
+  remoteStore.onBackgroundResult = (scope, id, file, options) => remoteUsage.ingestDisk(scope, id, file, options);
+  ctx = { key: `ssh:${windowPort}`, port: windowPort, store: remoteStore, usage: remoteUsage, composerModel: null, lastUsedAt: Date.now(), remote: true };
+  remoteContexts.set(windowPort, ctx);
+  return ctx;
+};
+
+const resolveContext = async targetContext => {
+  const windowPort = targetContext?.port;
+  if (!Number.isInteger(windowPort) || windowPort < 1 || windowPort > 65535) return localContext;
+  if (runtimeSettings().remoteSsh === false) return localContext;
+  if (isKnownLocalPort(windowPort)) return localContext;
+  if (remoteContexts.has(windowPort)) {
+    const existing = remoteContexts.get(windowPort);
+    existing.lastUsedAt = Date.now();
+    return existing;
+  }
+  if (!localStore.client?.server && typeof localStore.client?.discover === 'function') {
+    try { await localStore.client.discover(); } catch {}
+    if (isKnownLocalPort(windowPort)) return localContext;
+  }
+  const matched = await sshRegistry.resolveEndpointForPort(windowPort).catch(() => null);
+  if (!matched) return localContext;
+  return getOrCreateRemoteContext(windowPort);
+};
+
 const preferences=new PreferencesStore();
 const updater=new AppUpdater({pluginDir:join(HERE,'..','..'),dataDir:paths.data});
-let liveComposerModel = null;
-const metrics = async input => {
+const metrics = async (input, targetContext = null) => {
   if(ownership&&!await ownership.isOwner())throw Error('Sidecar ownership changed');
   runtimeSettings();
+  const ctx = await resolveContext(targetContext);
+  if (input && Object.hasOwn(input, 'composerModel')) ctx.composerModel = input.composerModel || null;
+  const { store, usage } = ctx;
   const prefs=await preferences.snapshot();
   const hostTheme=await readHostTheme(),liveTheme=integration.rendererTheme;
   const theme=(liveTheme?.fontFamily||liveTheme?.monoFontFamily)?{...liveTheme,...hostTheme}:hostTheme;
@@ -48,7 +151,7 @@ const metrics = async input => {
     return {connection:store.quota?'live':'stale',groups:store.quota||[],speed:null,usage:await usage.snapshot({sync:false,scope:requestedScope,groups:store.quota}),preferences:prefs,theme,integration:integration.health};
   }
   const base=await store.snapshot(input);if(input?.usageSync===true)void usage.sync(true);
-  return {...base,...(liveComposerModel?{composerModel:liveComposerModel}:{}),usage:await usage.snapshot({sync:input?.usageSync===true,scope:prefs?.usageScope||'local',groups:base.groups,maxWaitMs:input?.usageSync===true?0:350}).catch(()=>null),preferences:prefs,theme,integration:integration.health};
+  return {...base,...(ctx.composerModel?{composerModel:ctx.composerModel}:{}),usage:await usage.snapshot({sync:input?.usageSync===true,scope:prefs?.usageScope||'local',groups:base.groups,maxWaitMs:input?.usageSync===true?0:350}).catch(()=>null),preferences:prefs,theme,integration:integration.health};
 };
 const pricingSource=()=>{const s=readFileSync(join(HERE,'..','..','compat','pricing.cjs'),'utf8');return `window.__agPulsePricingFactory=(${s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'')});`;};
 const usageSource=()=>{const s=readFileSync(join(HERE,'..','..','compat','usage-ui.cjs'),'utf8');return `window.__agPulseUsageFactory=(${s.slice(s.indexOf('module.exports = ')+17).trim().replace(/;$/,'')});`;};
@@ -100,21 +203,18 @@ const syncLaunchConfig = async (force = false) => {
 const integration = new RuntimeUi({
   // Composer identity is authoritative. Unknown/new inline inputs request quota
   // only; SDK/HTTP panels keep the store's automatic most-recent selection.
-  snapshot: input => {
-    if (input && Object.hasOwn(input, 'composerModel')) liveComposerModel = input.composerModel || null;
-    return metrics({...input,selectLatest:false});
-  },
+  snapshot: (input, targetContext) => metrics({ ...input, selectLatest: false }, targetContext),
   preferences,
   updater,
   owner:ownership?.token,owns:()=>ownership?ownership.isOwner():true,
   source: makeRendererSource(readFileSync(join(HERE,'..','..','compat','i18n.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','inline-widget.cjs'),'utf8'),readFileSync(join(HERE,'..','..','compat','theme.cjs'),'utf8'),ownership?.token,ownership?.startedAt,updateSource()+pricingSource()+usageSource()),
   dataDir: paths.data,
   enabled: () => { const s = runtimeSettings(); return s.enabled !== false && s.inline !== false && s.mode !== 'legacy'; },
-  onTargets: () => { missingPortTicks = 0; },
+  onTargets: targets => { missingPortTicks = 0; pruneRemoteContexts(targets); },
   diagnoseError: async error => {
     if (error?.code !== 'ENOENT') { missingPortTicks = 0; return null; }
     const hostResources = resolveHostResources();
-    if (isRemoteHeadlessHost({ server: store.client?.server, hasLocalHostApp: Boolean(hostResources) })) {
+    if (isRemoteHeadlessHost({ server: localStore.client?.server, hasLocalHostApp: Boolean(hostResources) })) {
       missingPortTicks = 0;
       return {
         state: 'unavailable',
@@ -125,7 +225,7 @@ const integration = new RuntimeUi({
     missingPortTicks++;
     const host = await inspectHostArchive(hostResources);
     const launch = await syncLaunchConfig();
-    if (host.requiresDebugFlag || (missingPortTicks >= 2 && store.serverPid)) {
+    if (host.requiresDebugFlag || (missingPortTicks >= 2 && localStore.serverPid)) {
       const configured = Boolean(launch?.configured);
       const macConfigured = configured && process.platform === 'darwin';
       return {
@@ -146,7 +246,7 @@ const integration = new RuntimeUi({
 if (process.env.ANTIGRAVITY_SIDECAR_WEB_PORT) {
   const { SidecarApp, Response } = await loadSidecarSdk();
   if(!await ownership.claim())process.exit(0);
-  if (!isRemoteHeadlessHost({ server: store.client?.server, hasLocalHostApp: Boolean(resolveHostResources()) })) {
+  if (!isRemoteHeadlessHost({ server: localStore.client?.server, hasLocalHostApp: Boolean(resolveHostResources()) })) {
     void syncLaunchConfig(true).catch(() => {});
   }
   const app = new SidecarApp();
@@ -162,7 +262,8 @@ if (process.env.ANTIGRAVITY_SIDECAR_WEB_PORT) {
   app.run();
   integration.start();
   const shutdown=async()=>{
-    usage.dispose();store.dispose();
+    for (const key of [...remoteContexts.keys()]) disposeRemoteContext(key);
+    localUsage.dispose();localStore.dispose();
     const exitTimer=setTimeout(()=>process.exit(0),2000);exitTimer.unref();
     await integration.stop();ownership.stop();process.exit(0);
   };

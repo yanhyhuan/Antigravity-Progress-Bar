@@ -33,6 +33,8 @@ async function entryFixture(host,url,selection=false){
     'panel-source.mjs':{panelAppSource:()=>'',panelPageSource:()=>''},
     'updater.mjs':{AppUpdater:class{},releaseRuntimeDirectory(){}},
     'history.mjs':{SessionHistory:class{}},'transcript.mjs':{TranscriptReader:class{},transcriptBrainRoot:()=>''},
+    'ssh-remote.mjs':{RemoteAppClient:class{},RemoteAppSshRegistry:class{async resolveEndpointForPort(){return null;}}},
+    'remote-client.mjs':{RemoteIdeClient:class{}},
     'client.mjs':{IdeClient:class{}},'runtime.mjs':{ideTargets:async()=>({targets:[],port:0})},
   };
   const entry=new SourceTextModule(source,{context,identifier:url,initializeImportMeta(meta){meta.url=url;}});

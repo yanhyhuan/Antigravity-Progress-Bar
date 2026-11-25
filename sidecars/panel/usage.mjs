@@ -531,10 +531,10 @@ export class UsageLedger{
 export function weekStart(date){const d=new Date(date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.toISOString().slice(0,10);}
 
 export class DesktopUsage{
-  constructor(store,ledger=new UsageLedger(),{host=null,discoverLocal=null,owns=()=>true,now=Date.now,sliceMs=1500,continueDelay=1200,itemDelay=undefined,
+  constructor(store,ledger=new UsageLedger(),{host=null,discoverLocal=null,owns=()=>true,disposeLedger=true,now=Date.now,sliceMs=1500,continueDelay=1200,itemDelay=undefined,
     maxCandidates=20,maxCandidatesPerSlice=8,maxPassMs=15000,maxMapEntries=4096,localScanMs=30000,memorySoftLimitBytes=128*1024*1024,
     liveMaxConversations=16,liveMaxRows=8192,liveMaxBytes=4*1024*1024,liveMaxGroups=128,liveMaxRecoveryGuards=16,liveMaxRecoveries=256,liveRetryMs=1000,livePollMs=1000,liveRecoveryPollMs=1000,liveBackgroundPollMs=1000,liveBackgroundRetryMs=60000,pricing=null}={}){
-    this.store=store;this.ledger=ledger;this.fingerprints=new Map();this.host=host;this.owns=()=>owns()===true;this.now=now;
+    this.store=store;this.ledger=ledger;this.disposeLedger=disposeLedger!==false;this.fingerprints=new Map();this.host=host;this.owns=()=>owns()===true;this.now=now;
     this.lastModels=[];
     this.pricing=pricing===false?null:pricing===true?new PricingService(ledger.directory):pricing;
     if(this.pricing?.init)void this.pricing.init();
@@ -948,5 +948,5 @@ export class DesktopUsage{
     const stillSyncing=syncing||value?.summaryStale===true;
     return {...value,scope:requestedScope,accountKey:requestedScope==='local'?'all-local':identity,activeAccountKey:identity||null,accountAvailable:Boolean(identity),syncing:stillSyncing,status:stillSyncing?'syncing':this.status,missingConversations:this.missingConversations,confirmedMissingConversations:this.confirmedMissingConversations,retryingConversations:this.retryingConversations,persistenceError:this.store.usagePersistenceError===true||this.ledger.diskSummaryError===true,...(this.pricing?{pricing:this.pricing.snapshot(value?.models)}:{}),};
   }
-  dispose(){this.disposed=true;this.forceQueued=false;clearTimeout(this.continuation);this.continuation=null;clearTimeout(this.liveRecoveryTimer);this.liveRecoveryTimer=null;this.refreshLiveScope();this.fullRemaining.clear();this.fullJournal=null;this.ledger?.quotaEstimator?.dispose();this.pricing?.dispose?.();}
+  dispose(){this.disposed=true;this.forceQueued=false;clearTimeout(this.continuation);this.continuation=null;clearTimeout(this.liveRecoveryTimer);this.liveRecoveryTimer=null;this.refreshLiveScope();this.fullRemaining.clear();this.fullJournal=null;if(this.disposeLedger){this.ledger?.quotaEstimator?.dispose();this.pricing?.dispose?.();}}
 }

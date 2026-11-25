@@ -5,7 +5,7 @@
     {
       "name": "antigravity-pulse",
       "displayName": "Antigravity Progress Bar",
-      "version": "0.9.16",
+      "version": "0.9.18",
       "description": "Token throughput, cache hit, context window, quota forecast, 24h hourly usage, CNY/USD cost dashboard, and Windows task completion notifications.",
       "logo": "https://raw.githubusercontent.com/yanhyhuan/Antigravity-Progress-Bar/main/assets/logo.svg",
       "category": "Developer Tools",
@@ -27,8 +27,8 @@
       "license": "MIT",
       "source": {
         "type": "archive",
-        "url": "https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases/download/v0.9.16/antigrative-dashboard-0.9.16.zip",
-        "sha256": "748d17e54cdba58d81db962f5ec116eae9137b2e303cc43542840dbf09708de6"
+        "url": "https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases/download/v0.9.18/antigrative-dashboard-0.9.18.zip",
+        "sha256": "9db73e4211ff8dd278a3527cc456a5fe01cb4ff4375412e5b4add8de5a3aa7e2"
       }
     }
   ]

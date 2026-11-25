@@ -10,9 +10,11 @@ export class BackgroundStatistics {
  state(id){const j=this.jobs.get(id);return j?.state==='processing'?{state:'processing',code:'background-collection',stage:j.stage,processedSteps:j.steps,processedGenerators:j.generators}:j?.state==='failed'?{state:'limited',code:'budget-exceeded',reason:j.reason}:null;}
  request(scope,id,endpoint,{summary,isCurrent=()=>true}={}){
   if(this.disposed||!this.owns()||!HASH.test(scope)||!GUID.test(id)||!endpoint?.csrf||!Number.isInteger(endpoint.port))return false;
+  if(endpoint.socksPort!==undefined&&endpoint.socksPort!==null&&(!Number.isInteger(endpoint.socksPort)||endpoint.socksPort<1||endpoint.socksPort>65535))return false;
+  const serializableEndpoint={pid:endpoint.pid,port:endpoint.port,csrf:endpoint.csrf,...(endpoint.socksPort?{socksPort:endpoint.socksPort}:{}),...(endpoint.remote?{remote:true}:{})};
   const old=this.jobs.get(id);if(old&&old.scope===scope){if(old.state==='processing')return true;if(old.state==='failed'&&old.retryAt>this.now())return false;this.jobs.delete(id);}
   while(this.jobs.size>=8){const key=[...this.jobs].find(([,j])=>j!==this.active&&j.state!=='processing')?.[0];if(!key)return false;this.jobs.delete(key);}
-  this.jobs.set(id,{id,scope,endpoint,summary,isCurrent,state:'processing',stage:'queued',steps:0,generators:0});void this.pump();return true;
+  this.jobs.set(id,{id,scope,endpoint:serializableEndpoint,summary,isCurrent,state:'processing',stage:'queued',steps:0,generators:0});void this.pump();return true;
  }
  async pump(){
   if(this.active||this.disposed||!this.owns())return;

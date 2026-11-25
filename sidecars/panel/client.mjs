@@ -4,6 +4,7 @@ import https from 'node:https';
 import {setImmediate as yieldStream} from 'node:timers/promises';
 import { platformPaths } from '../../compat/platform.mjs';
 import { discoverProcesses,discoverDaemonFiles,httpLogPorts,httpsLogPorts,readLogTail,probeLoopbackPort,isProcessAlive,isRemoteHubCommand } from './discovery.mjs';
+import { createSocks5Agent, probeSocks5Port } from './socks5.mjs';
 import { TrajectoryJson } from './trajectory-json.mjs';
 import { TrajectoryReader } from './trajectory-reader.mjs';
 
@@ -103,6 +104,8 @@ function serverFromPorts(logPorts, processes, env = null, daemonRecords = [], { 
   const credentialSource = cliCsrf ? 'cmdline' : daemonCsrf ? 'daemon-file' : 'sidecar-env';
   Object.defineProperty(result, 'credentialSource', { value: credentialSource, enumerable: false });
   Object.defineProperty(result, 'remoteHub', { value: isRemoteHubCommand(row.CommandLine), enumerable: false });
+  Object.defineProperty(result, 'httpsPort', { value: validPort(daemon?.httpsPort) ? daemon.httpsPort : (httpsPort || null), enumerable: false });
+  Object.defineProperty(result, 'ports', { value: [...ports].filter(validPort), enumerable: false });
   return result;
 }
 
@@ -112,9 +115,9 @@ export function serverFromDiscovery(log, processes, { env = null, daemonFiles = 
 
 export class AntigravityClient {
   constructor(options = {}) {
-    const {paths=platformPaths,readLog=readLogTail,logStat=stat,daemonFiles=discoverDaemonFiles,processes=discoverProcesses,probe=probeLoopbackPort,pidAlive=isProcessAlive,now=Date.now,onRpc=null}=options;
+    const {paths=platformPaths,readLog=readLogTail,logStat=stat,daemonFiles=discoverDaemonFiles,processes=discoverProcesses,probe=probeLoopbackPort,probeSocks5=probeSocks5Port,socksAgentFactory=createSocks5Agent,pidAlive=isProcessAlive,now=Date.now,onRpc=null}=options;
     const hasDiscoveryOverrides=Boolean(options.paths||options.readLog||options.processes);
-    this.paths=paths;this.readLog=readLog;this.logStat=logStat;this.daemonFiles=daemonFiles;this.processes=processes;this.probe=probe;this.pidAlive=pidAlive;this.now=now;this.onRpc=onRpc;
+    this.paths=paths;this.readLog=readLog;this.logStat=logStat;this.daemonFiles=daemonFiles;this.processes=processes;this.probe=probe;this.probeSocks5=probeSocks5;this.socksAgentFactory=socksAgentFactory;this.pidAlive=pidAlive;this.now=now;this.onRpc=onRpc;
     this.env=Object.hasOwn(options,'env')?options.env:(hasDiscoveryOverrides?null:process.env);
     this.reader=new TrajectoryReader(this);
   }
@@ -164,6 +167,8 @@ export class AntigravityClient {
       : { port: server.port, csrf: match.csrfToken.trim(), pid: server.pid };
     Object.defineProperty(upgraded, 'credentialSource', { value: 'daemon-file', enumerable: false });
     Object.defineProperty(upgraded, 'remoteHub', { value: Boolean(server.remoteHub), enumerable: false });
+    Object.defineProperty(upgraded, 'httpsPort', { value: validPort(match.httpsPort) ? match.httpsPort : (server.httpsPort ?? null), enumerable: false });
+    Object.defineProperty(upgraded, 'ports', { value: Array.isArray(server.ports) ? server.ports : [server.port], enumerable: false });
     this.server = upgraded;
     this.verifiedServer = null;
     this.discoveredAt = this.now();
@@ -171,7 +176,14 @@ export class AntigravityClient {
   }
 
   async verifyCachedServer(server) {
-    if (!server || !this.pidAlive(server.pid)) return false;
+    if (!server) return false;
+    if (validPort(server.socksPort)) {
+      return await this.probeSocks5(server.socksPort, server.port, { timeoutMs: 800 }).catch(() => false);
+    }
+    if (server.remote === true) {
+      return await this.probe(server.port, { timeoutMs: 400 }).catch(() => false);
+    }
+    if (!this.pidAlive(server.pid)) return false;
     return await this.probe(server.port, { timeoutMs: 400 }).catch(() => false);
   }
 
@@ -291,10 +303,11 @@ export class AntigravityClient {
         const projection=['GetCascadeTrajectory','GetCascadeTrajectorySteps','GetCascadeTrajectoryGeneratorMetadata','GetAllCascadeTrajectories'].includes(method);
         const started=this.now();
         const isHttps=server.protocol==='https';
+        const socksAgent = validPort(server.socksPort) ? this.socksAgentFactory(server.socksPort, { timeoutMs: 12000 }) : null;
         // A rejected stream destroys its socket. Do not leave that socket in
         // the shared agent where an immediate quota refresh could reuse it.
         // Loopback-only self-signed TLS matches Antigravity's own setupLocalCertTrust.
-        const req = (isHttps?https.request:http.request)({ hostname: '127.0.0.1', port: server.port, method: 'POST', path: SERVICE + method, ...(isHttps?{rejectUnauthorized:false,agent:false}:projection?{agent:false}:{}),
+        const req = (isHttps?https.request:http.request)({ hostname: '127.0.0.1', port: server.port, method: 'POST', path: SERVICE + method, ...(isHttps?{rejectUnauthorized:false,agent:socksAgent||false}:socksAgent?{agent:socksAgent}:projection?{agent:false}:{}),
           headers: { 'Content-Type': 'application/json', 'Connect-Protocol-Version': '1', 'x-codeium-csrf-token': server.csrf, 'Content-Length': Buffer.byteLength(data) } }, res => {
           const projected=projection?new TrajectoryJson():null;
           let text = '',bytes=0,failed=false;
@@ -329,7 +342,7 @@ export class AntigravityClient {
         req.setTimeout(12000, () => req.destroy(new Error('Antigravity 本地接口超时')));
         // Bound wall time as well as idle time for slow large streams.
         const deadline=setTimeout(()=>req.destroy(new Error('Antigravity 本地接口超时')),30000);deadline.unref();
-        req.once('close',()=>clearTimeout(deadline));
+        req.once('close',()=>{clearTimeout(deadline);socksAgent?.destroy();});
         req.end(data);
       });
     } catch (error) {
@@ -346,7 +359,7 @@ export class AntigravityClient {
       }
       // A missing historical cascade, busy API or malformed response does not
       // prove the process/credential changed. Do not launch CIM scans for it.
-      const endpointLost=[401,403].includes(error.status)||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN'].includes(error.code);
+      const endpointLost=[401,403].includes(error.status)||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN','SOCKS5_CONNECT_FAILED','SOCKS5_PROTOCOL_ERROR','SOCKS5_AUTH_UNSUPPORTED'].includes(error.code);
       if(!endpointLost)throw error;
       // A late failure from an old endpoint cannot invalidate a newer one.
       if(this.server===server){
@@ -375,13 +388,14 @@ export class AntigravityClient {
     const input=JSON.stringify(method==='GetCascadeTrajectoryGeneratorMetadata'?{...body,includeMessages:false}:body);
     let pending=null;
     const parser=new TrajectoryJson({onRecord:(kind,index,value)=>{if(pending)throw Error('Statistics stream consumer overflow');pending={kind,index,value};}});
-    const started=this.now();let bytes=0,peakRetained=0,req,res,deadline,watch;
+    const started=this.now();let bytes=0,peakRetained=0,req,res,deadline,watch,socksAgent;
     const timeout=()=>Error('Antigravity 本地接口超时');
     const abort=error=>{streamError||=error;rejectAbort(streamError);res?.destroy();req?.destroy(streamError);};
     const isHttps=server.protocol==='https';
     try {
+      socksAgent=validPort(server.socksPort)?this.socksAgentFactory(server.socksPort,{timeoutMs:12000}):null;
       res=await new Promise((resolve,reject)=>{
-        req=(isHttps?https.request:http.request)({hostname:'127.0.0.1',port:server.port,method:'POST',path:SERVICE+method,agent:false,...(isHttps?{rejectUnauthorized:false}:{}),
+        req=(isHttps?https.request:http.request)({hostname:'127.0.0.1',port:server.port,method:'POST',path:SERVICE+method,agent:socksAgent||false,...(isHttps?{rejectUnauthorized:false}:{}),
           headers:{'Content-Type':'application/json','Connect-Protocol-Version':'1','x-codeium-csrf-token':server.csrf,'Content-Length':Buffer.byteLength(input)}},resolve);
         req.on('error',error=>{streamError||=error;rejectAbort(streamError);reject(error);});req.setTimeout(12000,()=>abort(timeout()));
         deadline=setTimeout(()=>abort(timeout()),wallMs);deadline.unref();
@@ -416,13 +430,13 @@ export class AntigravityClient {
           if (this.isVerifiedServer(server)) throw error;
         }
       }
-      const endpointLost=[401,403].includes(error?.status)||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN'].includes(error?.code);
+      const endpointLost=[401,403].includes(error?.status)||['ECONNREFUSED','ECONNRESET','EPIPE','ENOTCONN','SOCKS5_CONNECT_FAILED','SOCKS5_PROTOCOL_ERROR','SOCKS5_AUTH_UNSUPPORTED'].includes(error?.code);
       if(endpointLost&&this.server===server){
         this.server=null;this.verifiedServer=null;this.discoveryError=error;
         this.retryAt=Math.max(this.retryAt,this.lastScanAt+3000);
       }
       throw error;
-    } finally {clearTimeout(deadline);clearInterval(watch);res?.destroy();req?.destroy();}
+    } finally {clearTimeout(deadline);clearInterval(watch);res?.destroy();req?.destroy();socksAgent?.destroy();}
   }
 
   resetTrajectories(){this.reader.reset();}

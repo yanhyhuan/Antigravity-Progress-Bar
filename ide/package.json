@@ -2,7 +2,7 @@
   "name": "antigrative-dashboard-ide",
   "displayName": "Antigrative Dashboard IDE",
   "publisher": "you-should-know-me",
-  "version": "0.9.16",
+  "version": "0.9.18",
   "description": "Adaptive throughput, cache and context icons with local token usage charts in the Antigravity IDE Agent composer.",
   "license": "MIT",
   "repository": {"type":"git","url":"https://github.com/yanhyhuan/Antigravity-Progress-Bar.git"},
@@ -11,10 +11,17 @@
   "main": "./ide/extension.cjs",
   "activationEvents": ["onStartupFinished"],
   "contributes": {
-    "commands": [{"command":"antigrativeDashboard.ide.openHealth","title":"Antigrative Dashboard: Show IDE Status"}],
+    "commands": [
+      {"command":"antigrativeDashboard.ide.openHealth","title":"Antigrative Dashboard: Show IDE Status"},
+      {"command":"antigrativeDashboard.ide.repairLaunchConfig","title":"Antigrative Dashboard: Repair IDE Launch Flags"}
+    ],
     "configuration": {
       "title":"Antigrative Dashboard IDE",
-      "properties":{"antigrativeDashboard.ide.enabled":{"type":"boolean","default":true,"description":"Enable the standalone Antigravity IDE composer integration. Start the IDE with the loopback debugging flags described in the README."}}
+      "properties":{
+        "antigrativeDashboard.ide.enabled":{"type":"boolean","default":true,"description":"Enable the standalone Antigravity IDE composer integration. Start the IDE with the loopback debugging flags described in the README."},
+        "antigrativeDashboard.ide.autoConfigureLaunch":{"type":"string","enum":["prompt","auto","off"],"default":"prompt","description":"How to repair Antigravity IDE shortcuts/launchers when loopback debugging flags are missing or cleared by an IDE update."},
+        "antigrativeDashboard.ide.remoteSsh":{"type":"boolean","default":true,"description":"Allow Remote-SSH IDE windows to discover remote agy/language_server credentials via non-interactive ssh -o BatchMode=yes."}
+      }
     }
   }
 }

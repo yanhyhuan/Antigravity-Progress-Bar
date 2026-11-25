@@ -238,7 +238,7 @@ export class RuntimeUi {
     connection.inflight++;
     try {
       let result = {};
-      if (input.type === 'metrics') result = await this.enabled() ? await this.snapshot(validatedInput(input.input)) : { ...offline('Antigrative Dashboard 已停用'), enabled: false };
+      if (input.type === 'metrics') result = await this.enabled() ? await this.snapshot(validatedInput(input.input), connection.targetContext) : { ...offline('Antigrative Dashboard 已停用'), enabled: false };
       else if(input.type==='update'&&this.updater){
         if(!await this.enabled())throw Error('Plugin disabled');
         result=await this.updater.request(input.input);
@@ -267,7 +267,19 @@ export class RuntimeUi {
     connection.origin = this.targetOrigin(target);
     connection.ideWebview=target.ideWebview===true;
     connection.parentFrameId=target.expectedParentId;
-    connection.proofKey=target.ideWebview?JSON.stringify([target.expectedFrameId,target.expectedParentId,target.expectedUrl,target.workbenchId]):null;
+    let targetPort=null;
+    try{const parsed=Number(new URL(target.url).port);if(Number.isInteger(parsed)&&parsed>=1&&parsed<=65535)targetPort=parsed;}catch{}
+    connection.targetContext={
+      url:typeof target.url==='string'?target.url:'',
+      origin:connection.origin,
+      port:targetPort,
+      ideWebview:connection.ideWebview,
+      workbenchId:target.workbenchId||null,
+      remoteAuthority:target.remoteAuthority||null,
+      backendPort:Number.isInteger(target.backendPort)?target.backendPort:targetPort,
+      workspaceUri:target.workspaceUri||null,
+    };
+    connection.proofKey=target.ideWebview?JSON.stringify([target.expectedFrameId,target.expectedParentId,target.expectedUrl,target.workbenchId,target.remoteAuthority||null,target.backendPort||null]):null;
     connection.generation=0;connection.revoked=false;connection.heartbeatFailures=0;
     connection.retiredContexts=new Set();
     connection.contexts = new Set();connection.contextCandidates=new Map(); connection.inflight = 0; connection.mounted = false;
@@ -313,7 +325,7 @@ export class RuntimeUi {
       for (const [url, connection] of this.sessions) if (!active.has(url) || connection.closed || connection.revoked) { await this.detach(connection); this.sessions.delete(url); }
       for (const target of targets) {
         const connection = this.sessions.get(target.webSocketDebuggerUrl);
-        const proofKey=target.ideWebview?JSON.stringify([target.expectedFrameId,target.expectedParentId,target.expectedUrl,target.workbenchId]):null;
+        const proofKey=target.ideWebview?JSON.stringify([target.expectedFrameId,target.expectedParentId,target.expectedUrl,target.workbenchId,target.remoteAuthority||null,target.backendPort||null]):null;
         if (connection && (connection.origin !== this.targetOrigin(target)||connection.proofKey!==proofKey)) { await this.detach(connection); this.sessions.delete(target.webSocketDebuggerUrl); }
       }
       for (const target of targets) if (!this.sessions.has(target.webSocketDebuggerUrl)) this.sessions.set(target.webSocketDebuggerUrl, await this.attach(target));

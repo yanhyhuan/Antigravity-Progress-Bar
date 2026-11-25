@@ -49,8 +49,10 @@ class IdeTests(unittest.TestCase):
                 pristine = output.read_bytes()
                 checksum = output.with_suffix(output.suffix + '.sha256')
                 original_checksum = checksum.read_bytes()
-                ide_runtime = ('compat/host-theme.mjs', 'compat/pricing.cjs', 'ide/main.mjs', 'ide/runtime.mjs',
-                               'ide/webview-targets.mjs', 'ide/client.mjs', 'ide/discovery.mjs', 'ide/surface.cjs')
+                ide_runtime = ('compat/host-theme.mjs', 'compat/launch-config.mjs', 'compat/pricing.cjs',
+                               'sidecars/panel/socks5.mjs', 'sidecars/panel/ssh-remote.mjs',
+                               'ide/main.mjs', 'ide/runtime.mjs', 'ide/webview-targets.mjs', 'ide/client.mjs',
+                               'ide/remote-client.mjs', 'ide/launch-self-heal.mjs', 'ide/discovery.mjs', 'ide/surface.cjs')
                 for name in publisher.LARGE_CONVERSATION_MODULES + ide_runtime:
                     with self.subTest(package=output.suffix, module=name):
                         removed = prefix + name

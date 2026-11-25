@@ -7,10 +7,10 @@ from xml.sax.saxutils import escape, quoteattr
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
-MODULES = [f'compat/{name}' for name in ['runtime-ui.mjs', 'platform.mjs', 'preferences.mjs',
+MODULES = [f'compat/{name}' for name in ['runtime-ui.mjs', 'platform.mjs', 'preferences.mjs', 'launch-config.mjs',
     'sidecar-owner.mjs', 'host-theme.mjs', 'i18n.cjs', 'theme.cjs', 'inline-widget.cjs', 'pricing.cjs', 'usage-ui.cjs']]
-MODULES += [f'sidecars/panel/{name}.mjs' for name in ['collection-state', 'background-statistics', 'background-worker', 'disk-statistics', 'usage-disk-worker', 'usage-index', 'client', 'trajectory-json', 'trajectory-reader', 'discovery', 'store', 'history', 'metrics', 'rate-quality', 'context', 'transcript', 'quota-estimator', 'usage', 'pricing', 'local-conversations', 'delegation', 'task-usage', 'delegated-usage']]
-MODULES += [f'ide/{name}' for name in ['extension.cjs', 'host.cjs', 'main.mjs', 'client.mjs',
+MODULES += [f'sidecars/panel/{name}.mjs' for name in ['collection-state', 'background-statistics', 'background-worker', 'disk-statistics', 'usage-disk-worker', 'usage-index', 'client', 'socks5', 'ssh-remote', 'trajectory-json', 'trajectory-reader', 'discovery', 'store', 'history', 'metrics', 'rate-quality', 'context', 'transcript', 'quota-estimator', 'usage', 'pricing', 'local-conversations', 'delegation', 'task-usage', 'delegated-usage']]
+MODULES += [f'ide/{name}' for name in ['extension.cjs', 'host.cjs', 'main.mjs', 'client.mjs', 'remote-client.mjs', 'launch-self-heal.mjs',
     'discovery.mjs', 'runtime.mjs', 'webview-targets.mjs', 'surface.cjs', 'launch.mjs', 'manage.py']]
 
 
