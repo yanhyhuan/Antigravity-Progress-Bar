@@ -1190,6 +1190,86 @@ test('font sync, scope switching and quota window reference render end-to-end in
   }
   assert.ok(patrolLoopCheck.postTickDelta <= patrolLoopCheck.postVsyncs + 2, `Post-patrol animation must retain single rAF loop (got ${patrolLoopCheck.postTickDelta} ticks in ${patrolLoopCheck.postVsyncs} VSyncs)`);
   assert.ok(patrolLoopCheck.postPaintDelta <= patrolLoopCheck.postVsyncs + 2 && patrolLoopCheck.frameAdvance <= 16, `Post-patrol clip must play at 1x ~17fps, got paintDelta=${patrolLoopCheck.postPaintDelta}, frameAdvance=${patrolLoopCheck.frameAdvance}`);
+
+  // 3h. Composer-dock queued-message buttons auto-avoidance + free horizontal rim drag persistence
+  const dockAvoidAndDrag = await evalJs(`async () => {
+    const host = document.querySelector('[data-ag-pulse-neon-mascot]');
+    const dbg = host.__agPulseNailongDebug;
+    const actor = host.shadowRoot.querySelector('.actor');
+    const comp = document.querySelector('.composer');
+    // Wrap composer in a 2.35+ non-scrolling composer dock container with a sibling queued-message slot above it
+    const dock = document.createElement('div');
+    dock.className = 'composer-dock-test';
+    dock.style.cssText = 'display:flex;flex-direction:column;width:100%;margin-top:160px;';
+    comp.style.marginTop = '0px';
+    comp.parentElement.insertBefore(dock, comp);
+    const queueSlot = document.createElement('div');
+    queueSlot.style.cssText = 'display:none;margin-bottom:8px;';
+    dock.append(queueSlot, comp);
+    window.dispatchEvent(new Event('resize'));
+    await window.__nextFrame();
+    await window.__nextFrame();
+
+    const initialLeft = parseFloat(dbg.state.stageLeft);
+    const initialAvoided = dbg.state.autoAvoided;
+
+    // Mount a queued-message bar right above composer with Edit & Delete buttons on the right
+    queueSlot.style.cssText = 'display:flex;align-items:center;justify-content:space-between;width:844px;box-sizing:border-box;height:44px;padding:0 12px;margin:0 auto 8px;border-radius:12px;border:1px solid #ccc;background:#fff;';
+    queueSlot.innerHTML = '<span>Queued prompt text</span><div style="display:flex;gap:6px;"><button id="q-edit" type="button" style="width:28px;height:28px;">✏️</button><button id="q-del" type="button" style="width:28px;height:28px;">🗑️</button></div>';
+    await window.__nextFrame();
+    await window.__nextFrame();
+
+    const editBtn = document.getElementById('q-edit');
+    const editRect = editBtn.getBoundingClientRect();
+    const actorRect = actor.getBoundingClientRect();
+    const hitEl = document.elementFromPoint(editRect.left + editRect.width / 2, editRect.top + editRect.height / 2);
+    const avoidedState = {
+      shown: dbg.state.shown,
+      autoAvoided: dbg.state.autoAvoided,
+      avoidedLeft: parseFloat(dbg.state.stageLeft),
+      actorRight: actorRect.right,
+      editLeft: editRect.left,
+      editUnblocked: hitEl === editBtn || editBtn.contains(hitEl),
+    };
+
+    // Clear queued message -> Nailoong returns to home right corner
+    queueSlot.innerHTML = '';
+    queueSlot.style.display = 'none';
+    await window.__nextFrame();
+    await window.__nextFrame();
+    const restoredLeft = parseFloat(dbg.state.stageLeft);
+    const restoredAvoided = dbg.state.autoAvoided;
+
+    // Drag Nailoong horizontally 180px left along the composer rim and verify persistence
+    const ar = actor.getBoundingClientRect();
+    const sx = ar.left + ar.width / 2, sy = ar.top + ar.height / 2;
+    actor.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: sx, clientY: sy, pointerId: 1, bubbles: true }));
+    actor.dispatchEvent(new PointerEvent('pointermove', { button: 0, clientX: sx - 20, clientY: sy + 1, pointerId: 1, bubbles: true }));
+    actor.dispatchEvent(new PointerEvent('pointermove', { button: 0, clientX: sx - 180, clientY: sy + 2, pointerId: 1, bubbles: true }));
+    actor.dispatchEvent(new PointerEvent('pointerup', { button: 0, clientX: sx - 180, clientY: sy + 2, pointerId: 1, bubbles: true }));
+    await window.__nextFrame();
+
+    const draggedLeft = parseFloat(dbg.state.stageLeft);
+    const savedRx = localStorage.getItem('ag-pulse-nailong-v3-rx');
+    return {
+      initialLeft,
+      initialAvoided,
+      avoidedState,
+      restoredLeft,
+      restoredAvoided,
+      draggedLeft,
+      savedRx,
+    };
+  }`);
+  assert.equal(dockAvoidAndDrag.initialAvoided, false, 'Nailoong starts un-avoided when no dock buttons exist above composer');
+  assert.equal(dockAvoidAndDrag.avoidedState.shown, true, 'Nailoong stays visible by stepping aside when room exists on composer rim');
+  assert.equal(dockAvoidAndDrag.avoidedState.autoAvoided, true, 'Nailoong enters autoAvoided mode when queued-message buttons appear above composer');
+  assert.ok(dockAvoidAndDrag.avoidedState.actorRight <= dockAvoidAndDrag.avoidedState.editLeft - 4, `Nailoong actor (${dockAvoidAndDrag.avoidedState.actorRight}) must step left of queued Edit button (${dockAvoidAndDrag.avoidedState.editLeft})`);
+  assert.equal(dockAvoidAndDrag.avoidedState.editUnblocked, true, 'Queued-message Edit button must be 100% unblocked for clicks');
+  assert.equal(dockAvoidAndDrag.restoredAvoided, false, 'Nailoong clears autoAvoided once queued message disappears');
+  assert.equal(dockAvoidAndDrag.restoredLeft, dockAvoidAndDrag.initialLeft, 'Nailoong returns to home rim position after queued message clears');
+  assert.ok(Math.abs((dockAvoidAndDrag.initialLeft - dockAvoidAndDrag.draggedLeft) - 180) <= 6, `Horizontal rim drag should shift Nailoong ~180px left (from ${dockAvoidAndDrag.initialLeft} to ${dockAvoidAndDrag.draggedLeft})`);
+  assert.ok(Number(dockAvoidAndDrag.savedRx) > 0.1, `Horizontal rim drag must persist ag-pulse-nailong-v3-rx in localStorage (got ${dockAvoidAndDrag.savedRx})`);
   } finally {
     try { cdp?.close(); } catch {}
     killBrowser(child);

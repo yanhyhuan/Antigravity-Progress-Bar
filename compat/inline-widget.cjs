@@ -445,13 +445,14 @@ module.exports = function installAgPulseInlineWidget() {
   }
   function createNeonMascot({isSuppressed=()=>false}={}){
     let host=null,shadow=null,stage=null,canvas=null,ctx=null,backCanvas=null,backCtx=null,actor=null,sparks=null,bubble=null,bTextEl=null,menuEl=null,tuckBtnLbl=null;
-    let enabled=true,shown=false,everShown=false,lastHiddenAt=0,tucked=localGet('ag-pulse-nailong-v3-tucked')==='1',curComp=null,curBar=null,curData=null;
+    const parseRimRatio=v=>{if(v===null||v==='')return 0;const n=Number(v);return Number.isFinite(n)&&n>=0&&n<=1?n:0;};
+    let enabled=true,shown=false,everShown=false,lastHiddenAt=0,tucked=localGet('ag-pulse-nailong-v3-tucked')==='1',rimRatio=parseRimRatio(localGet('ag-pulse-nailong-v3-rx')),curComp=null,curBar=null,curData=null;
     let hideTimer=null,showDelayTimer=null,holdTimer=null,bubbleTimer=null,sleepTimer=null,zzzTimer=null,patrolIdleTimer=null,rafId=null,dpr=2;
     let loopGen=0,inTick=false,tickCount=0,lastFinishCelebrateAt=0,lastSyncedConvId=null;
     let lastPaintSig='',paintCount=0,skippedUnreadyCount=0,showToggleCount=0,lastActorH=-1,lastActorBottom=-1,lastStageLeft='',lastStageTop='',lastStageTheme='';
-    let pointerDown=false,gestureMode='none',downX=0,downY=0,lastX=0,lastY=0,startPeek=0,dragPeekVal=0,petTravel=0,nextSparkAt=46;
+    let pointerDown=false,gestureMode='none',downX=0,downY=0,lastX=0,lastY=0,startPeek=0,dragPeekVal=0,startStageLeft=0,petTravel=0,nextSparkAt=46;
     let hovered=false,menuOpen=false,lastTypeAt=0,typeDir=1,typeImpulse=0,boundEditor=null;
-    let sleeping=false,walking=false,walkX=0,walkTargetX=0,walkState='out',walkPauseUntil=0,facing=1,wasRunning=false,moveIndex=0,lastClickAt=0,transientText='';
+    let sleeping=false,walking=false,walkX=0,walkTargetX=0,walkDir=-1,walkState='out',walkPauseUntil=0,facing=1,wasRunning=false,moveIndex=0,lastClickAt=0,transientText='',autoAvoided=false,lastSafeLeft=null;
     let activeShow=null,lastTs=null;
     const cursors={wave:0,peek:0,work:0,eat:0,dance:0,sleep:0};
     const dirs={wave:1,peek:1,work:1,eat:1,dance:1,sleep:1};
@@ -461,7 +462,7 @@ module.exports = function installAgPulseInlineWidget() {
       sqX:1,sqXV:0,sqY:1,sqYV:0,
       tilt:0,walkBob:0,
     };
-    const DEFAULT_HINT='奶龙值班中 · 左键互动 / 向下拖扒框 / 双击空翻 / 右键菜单';
+    const DEFAULT_HINT='奶龙值班中 · 左右拖换位 / 向下拖扒框 / 双击空翻 / 右键菜单';
     const isEligible=comp=>{
       if(!comp||comp.kind==='subagent'||comp.kind==='ide')return false;
       const m=comp.model?.isConnected?comp.model:(comp.branch||comp.row)?.querySelector(MODEL_TRIGGER_SELECTOR);
@@ -485,6 +486,7 @@ module.exports = function installAgPulseInlineWidget() {
     };
     const currentStatusLine=()=>{
       if(transientText)return transientText;
+      if(gestureMode==='dragX')return '左右拖动调整站位 · 松手固定在输入框边沿';
       if(gestureMode==='dragPeek')return dragPeekVal>0.45?'松手即可扒在输入框边沿偷看':'继续向上拖即可跳回输入框顶上';
       if(tucked)return '扒着输入框暗中观察 · 向上拖动或双击恢复站姿';
       if(walking)return '哒哒哒 · 正沿着输入框顶边巡逻散步';
@@ -570,7 +572,7 @@ module.exports = function installAgPulseInlineWidget() {
       if(!bubble||!bTextEl)return;
       if(menuOpen){bubble.dataset.open='false';return;}
       bTextEl.textContent=currentStatusLine();
-      const show=Boolean(shown&&gestureMode!=='rub'&&(hovered||gestureMode==='dragPeek'||Boolean(transientText)));
+      const show=Boolean(shown&&gestureMode!=='rub'&&(hovered||gestureMode==='dragPeek'||gestureMode==='dragX'||Boolean(transientText)));
       if(show)updateBubblePos();
       bubble.dataset.open=String(show);
     };
@@ -800,10 +802,11 @@ module.exports = function installAgPulseInlineWidget() {
           if(tucked||gestureMode!=='none'){
             stopWalk(false);
           }else if(walkState==='out'){
-            walkX=Math.max(walkTargetX,walkX-86*dt);
+            const step=86*dt;
+            walkX=walkDir<0?Math.max(walkTargetX,walkX-step):Math.min(walkTargetX,walkX+step);
             phys.walkBob+=dt*14;
             position();
-            if(walkX<=walkTargetX+0.5){
+            if(Math.abs(walkX-walkTargetX)<=0.5){
               walkState='pause';
               walkPauseUntil=ts+1250;
               cursors.wave=0;
@@ -811,14 +814,15 @@ module.exports = function installAgPulseInlineWidget() {
             }
           }else if(walkState==='pause'){
             if(ts>=walkPauseUntil){
-              facing=-1;
+              facing=walkDir<0?-1:1;
               walkState='back';
             }
           }else{
-            walkX=Math.min(0,walkX+96*dt);
+            const step=96*dt;
+            walkX=walkDir<0?Math.min(0,walkX+step):Math.max(0,walkX-step);
             phys.walkBob+=dt*15;
             position();
-            if(walkX>=-0.5){
+            if(Math.abs(walkX)<=0.5){
               walkX=0;facing=1;walking=false;
               position();
               spawnParticles(2,'heart');
@@ -924,7 +928,7 @@ module.exports = function installAgPulseInlineWidget() {
         // 4. Paint 2x SSAA Canvas via atomic back-buffer!
         paintCanvasFrame(bodyClip,playbackRate,dt,reduced,bodyRot,spinCenter);
 
-        if(hovered||gestureMode==='dragPeek'||transientText||menuOpen)updateBubblePos();
+        if(hovered||gestureMode==='dragPeek'||gestureMode==='dragX'||transientText||menuOpen)updateBubblePos();
       }finally{
         inTick=false;
       }
@@ -949,7 +953,7 @@ module.exports = function installAgPulseInlineWidget() {
       host.style.cssText='position:fixed;inset:0 auto auto 0;width:0;height:0;pointer-events:none;z-index:36;';
       host.__agPulseNailongDebug={
         get atlases(){return nailongDecodedAtlases;},
-        get state(){return {shown,stageShown:stage?.dataset.shown==='true',stageHidden:Boolean(stage?.hidden),walking,walkX,lastPaintSig,paintCount,tickCount,activeLoop:rafId!==null,skippedUnreadyCount,showToggleCount};},
+        get state(){return {shown,stageShown:stage?.dataset.shown==='true',stageHidden:Boolean(stage?.hidden),walking,walkX,rimRatio,autoAvoided,stageLeft:lastStageLeft,lastPaintSig,paintCount,tickCount,activeLoop:rafId!==null,skippedUnreadyCount,showToggleCount};},
         stepFrame(dt=0.08){paintCanvasFrame(isRunningNow()?'work':'wave',1,dt,false,0,false);},
       };
       shadow=host.attachShadow({mode:'open'});
@@ -1094,11 +1098,17 @@ module.exports = function installAgPulseInlineWidget() {
       const card=findCard(curComp);
       if(!card||!shown||tucked)return;
       const cr=card.getBoundingClientRect();
-      const maxSpan=Math.min(260,Math.max(80,cr.width-NAILONG_CW-44));
-      if(maxSpan<85)return;
+      const minLeft=Math.round(cr.left+6),maxLeft=Math.round(cr.right+2-NAILONG_CW);
+      const totalSpan=maxLeft-minLeft;
+      if(totalSpan<85)return;
+      const anchorLeft=Math.round(maxLeft-rimRatio*totalSpan);
+      const roomLeft=anchorLeft-minLeft,roomRight=maxLeft-anchorLeft;
+      walkDir=roomLeft>=roomRight?-1:1;
+      const maxSpan=Math.min(260,Math.max(0,walkDir<0?roomLeft:roomRight));
+      if(maxSpan<70)return;
       stopWalk(false);
       resetSleepIdle();
-      walking=true;facing=1;walkState='out';walkTargetX=-maxSpan;
+      walking=true;facing=walkDir<0?1:-1;walkState='out';walkTargetX=walkDir*maxSpan;
       if(announce)say('哒哒哒 · 沿着输入框顶边巡视一圈领地',3200);
       ensureLoop();
     };
@@ -1193,6 +1203,7 @@ module.exports = function installAgPulseInlineWidget() {
       downY=lastY=e.clientY;
       startPeek=phys.peek;
       dragPeekVal=startPeek;
+      startStageLeft=stage?(parseFloat(stage.style.left)||stage.getBoundingClientRect().left):0;
       petTravel=0;
       nextSparkAt=46;
       try{actor.setPointerCapture(e.pointerId);}catch{}
@@ -1208,7 +1219,10 @@ module.exports = function installAgPulseInlineWidget() {
 
       if(gestureMode==='none'&&Math.hypot(dx,dy)>6){
         clearTimeout(holdTimer);
-        if(!tucked&&dy>5&&Math.abs(dy)>Math.abs(dx)*0.82){
+        if(Math.abs(dx)>7&&Math.abs(dx)>Math.abs(dy)*1.18){
+          stopWalk(false);activeShow=null;resetSleepIdle();
+          gestureMode='dragX';
+        }else if(!tucked&&dy>5&&Math.abs(dy)>Math.abs(dx)*0.82){
           stopWalk(false);activeShow=null;resetSleepIdle();
           gestureMode='dragPeek';
         }else if(tucked&&dy<-5&&Math.abs(dy)>Math.abs(dx)*0.72){
@@ -1217,6 +1231,22 @@ module.exports = function installAgPulseInlineWidget() {
         }else{
           enterRubbing();
         }
+      }
+
+      if(gestureMode==='dragX'){
+        const card=findCard(curComp);
+        if(card){
+          const cr=card.getBoundingClientRect();
+          const minLeft=Math.round(cr.left+6),maxLeft=Math.round(cr.right+2-NAILONG_CW);
+          const span=Math.max(1,maxLeft-minLeft);
+          const nextLeft=Math.max(minLeft,Math.min(maxLeft,Math.round(startStageLeft+dx)));
+          rimRatio=Math.max(0,Math.min(1,(maxLeft-nextLeft)/span));
+          walkX=0;
+          position();
+        }
+        refreshBubble();
+        ensureLoop();
+        return;
       }
 
       if(gestureMode==='dragPeek'){
@@ -1240,6 +1270,18 @@ module.exports = function installAgPulseInlineWidget() {
       pointerDown=false;
       clearTimeout(holdTimer);
       try{actor?.releasePointerCapture(e.pointerId);}catch{}
+
+      if(gestureMode==='dragX'){
+        gestureMode='none';
+        localSet('ag-pulse-nailong-v3-rx',rimRatio.toFixed(4));
+        if(!tucked)phys.jumpV=-85;
+        spawnParticles(3,'star');
+        say('换好新站位啦 · 以后就在这里陪你',2200);
+        position();
+        refreshBubble();
+        ensureLoop();
+        return;
+      }
 
       if(gestureMode==='dragPeek'){
         const finalVal=dragPeekVal;
@@ -1407,6 +1449,73 @@ module.exports = function installAgPulseInlineWidget() {
       }
       return false;
     };
+    const findDockRoot=(card,cr)=>{
+      let root=card,cur=card.parentElement;
+      for(let i=0;i<9&&cur&&cur!==document.body&&cur!==document.documentElement;i++){
+        if(cur.matches?.(PANE_BOUNDARY))break;
+        const s=getComputedStyle(cur);
+        if(s.overflowY==='auto'||s.overflowY==='scroll')break;
+        if(s.display!=='contents'){
+          const r=cur.getBoundingClientRect();
+          if(r.width<=0||r.height<=0||r.height>cr.height+360||r.height>innerHeight*0.68)break;
+        }
+        let hasMessagePane=false;
+        for(const sib of cur.children){
+          if(sib===root||sib.contains(card))continue;
+          const ss=getComputedStyle(sib);
+          if(ss.display==='none'||ss.position==='fixed'||ss.position==='absolute')continue;
+          const sr=sib.getBoundingClientRect();
+          if(ss.overflowY==='auto'||ss.overflowY==='scroll'||sr.height>220||(parseFloat(ss.flexGrow)>0&&sr.height>120)){
+            hasMessagePane=true;break;
+          }
+        }
+        if(hasMessagePane)break;
+        root=cur;
+        cur=cur.parentElement;
+      }
+      return root;
+    };
+    const collectDockObstacles=(card,cr,rimScreenY)=>{
+      const dockRoot=findDockRoot(card,cr);
+      if(!dockRoot||dockRoot===card)return [];
+      const actorTop=rimScreenY-(tucked?56:98);
+      const actorBottom=rimScreenY+8;
+      const obstacles=[];
+      for(const el of dockRoot.querySelectorAll('button,[role="button"],a[href],input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')){
+        if(card.contains(el)||(host&&(el===host||host.contains(el)))||(curBar&&(el===curBar||curBar.contains(el))))continue;
+        if(el.closest('[hidden],[inert],[aria-hidden="true"],[data-closed],[data-state="closed"],[data-ending-style]'))continue;
+        const cs=getComputedStyle(el);
+        if(cs.display==='none'||cs.visibility==='hidden'||cs.pointerEvents==='none')continue;
+        const r=el.getBoundingClientRect();
+        if(r.width<=0||r.height<=0||r.bottom<=actorTop||r.top>=actorBottom||r.right<=cr.left-20||r.left>=cr.right+20)continue;
+        obstacles.push({left:r.left,right:r.right,top:r.top,bottom:r.bottom});
+      }
+      return obstacles;
+    };
+    const resolveDockSafeLeft=(desiredLeft,minLeft,maxLeft,obstacles)=>{
+      if(gestureMode==='dragX'||!obstacles.length){autoAvoided=false;lastSafeLeft=null;return desiredLeft;}
+      const hits=(stageLeft,pad)=>obstacles.some(o=>o.right>stageLeft+20-pad&&o.left<stageLeft+(NAILONG_CW-20)+pad);
+      if(!autoAvoided&&!hits(desiredLeft,-2)){lastSafeLeft=null;return desiredLeft;}
+      if(autoAvoided&&!hits(desiredLeft,6)){autoAvoided=false;lastSafeLeft=null;return desiredLeft;}
+      if(autoAvoided&&lastSafeLeft!==null&&lastSafeLeft>=minLeft&&lastSafeLeft<=maxLeft&&!hits(lastSafeLeft,3)){
+        return lastSafeLeft;
+      }
+      const candidates=new Set([minLeft,maxLeft]);
+      for(const o of obstacles){
+        candidates.add(Math.floor(o.left-8-(NAILONG_CW-20)));
+        candidates.add(Math.ceil(o.right+8-20));
+      }
+      for(let x=maxLeft;x>=minLeft;x-=16)candidates.add(x);
+      let best=null,bestDist=Infinity;
+      for(const c of candidates){
+        if(c<minLeft||c>maxLeft||hits(c,6))continue;
+        const dist=Math.abs(c-desiredLeft);
+        if(dist<bestDist||(dist===bestDist&&c<best)){best=c;bestDist=dist;}
+      }
+      if(best===null){autoAvoided=false;lastSafeLeft=null;return null;}
+      autoAvoided=true;lastSafeLeft=best;
+      return best;
+    };
     const position=()=>{
       if(disposed||!enabled||isSuppressed()||!curComp||!curBar?.isConnected||curBar.style.visibility==='hidden'||!isEligible(curComp)){requestShown(false);return;}
       const card=findCard(curComp);
@@ -1416,13 +1525,17 @@ module.exports = function installAgPulseInlineWidget() {
       if(cr.width<minWidth||cr.top<minTop||cr.bottom>maxBottom||cr.right<minRight){requestShown(false);return;}
       const nowRunning=isRunningNow();
       if(nowRunning&&walking){walking=false;facing=1;walkX=0;}
-      const baseLeft=Math.round(cr.right+2-NAILONG_CW);
       const minLeft=Math.round(cr.left+6);
-      const clampedWalk=Math.max(minLeft-baseLeft,Math.min(0,Math.round(walkX)));
-      const left=baseLeft+clampedWalk;
+      const maxLeft=Math.round(cr.right+2-NAILONG_CW);
+      const anchorLeft=Math.round(maxLeft-rimRatio*Math.max(0,maxLeft-minLeft));
+      const desiredLeft=Math.max(minLeft,Math.min(maxLeft,anchorLeft+Math.round(walkX)));
       const rimScreenY=Math.round(cr.top+1);
+      const dockObstacles=collectDockObstacles(card,cr,rimScreenY);
+      const safeLeft=resolveDockSafeLeft(desiredLeft,minLeft,maxLeft,dockObstacles);
+      if(safeLeft===null){requestShown(false);return;}
+      const left=safeLeft;
       const top=rimScreenY-NAILONG_RIM_Y;
-      const bodyRect={left:left+20,top:rimScreenY-96,right:left+NAILONG_CW-20,bottom:rimScreenY};
+      const bodyRect={left:left+20,top:rimScreenY-(tucked?56:96),right:left+NAILONG_CW-20,bottom:rimScreenY};
       if(hasCollision(card,bodyRect)){requestShown(false);return;}
       ensureHost();
       const nextDpr=Math.min(3,Math.max(2,window.devicePixelRatio||2));

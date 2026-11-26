@@ -27,6 +27,8 @@ Python 3.10+ 仅用于生命周期，无 pip 依赖；后台使用宿主 Node，
 
 ## Antigravity 自带 IDE
 
+2026-11-26 / **v0.9.19（3D 奶龙输入框上方操作按钮自动避让与横向自由拖动换位）**：针对排队消息卡片（Queued Message 右侧编辑 `✏️` / 删除 `🗑️` 按钮）、待确认操作条及 `/btw` 顶栏等挂载在输入框上方同属底部栏（Composer Dock）的交互按钮，新增非滚动底部栏障碍扫描与迟滞自动横向让位（优先平移至按钮左侧无遮挡区间，全宽占满时自动收起隐藏，队列清空后自动归位；普通聊天滚动区内的消息按钮仍严格豁免防闪烁）；同时新增鼠标按住奶龙沿输入框顶边**左右自由拖动换站位**（自动持久化记忆至 `localStorage`，巡逻散步方向随当前左右余量自动切换）。
+
 2026-11-26 / **v0.9.18（同步上游 v0.9.17–v0.9.18 Remote-SSH 窗口路由与独立 IDE 启动自愈）**：
 - **桌面端 App `(SSH: <host>)` 窗口与独立 IDE Remote-SSH 支持**：新增零依赖本地回环 SOCKS5 客户端（`sidecars/panel/socks5.mjs`）与本机 `ssh -D` 隧道及远端探测模块（`sidecars/panel/ssh-remote.mjs`），通过 `ssh -T ... -- <destination> sh -s` 经 `stdin` 管道执行无通配符 POSIX `sh` 探测（`BatchMode=yes`，排除探测自身 PID 并按整行锚定解析 `===AGP_PS===` / `===AGP_DAEMON===` / `===AGP_LOGS===`，兼容远端 `zsh`/`bash`/`fish`/`csh` 默认登录 shell 与登录横幅）；在 `sidecars/panel/main.mjs` 与 `ide/main.mjs` 隔离本地/远程窗口上下文（`localContext` / `remoteContexts`，禁用远端窗口的本地磁盘扫描，共享本机 `UsageLedger` 与双币种 `PricingService`）；独立 IDE 同步支持校验 `vscode-remote+ssh-002dremote-002b...` Webview 与远端 `.antigravity-ide-server` 凭据配对（`ide/webview-targets.mjs`、`ide/remote-client.mjs`）。
 - **独立 IDE `DevToolsActivePort` 探活与跨平台启动参数自愈**：在 `compat/launch-config.mjs`、`ide/launch-self-heal.mjs`、`ide/extension.cjs` 中新增回环调试端口 TCP 探活与 Windows `.lnk` / Linux `.desktop` / macOS 启动器参数检测修复（`antigrativeDashboard.ide.autoConfigureLaunch` 及 `Repair IDE Launch Flags` 命令），解决 IDE 自动升级清空启动参数后残留旧端口文件导致静默重连的问题；完整保留 3D 奶龙、彩色双币种 24h 看板、`Antigravity 2.35.0` 模型映射与 Windows 任务完成通知。
@@ -57,7 +59,7 @@ Python 3.10+ 仅用于生命周期，无 pip 依赖；后台使用宿主 Node，
 
 2026-11-17 / **v0.9.1**：项目维护与 App 更新源迁移至 `ATtacK030130/antigrative-dashboard`（保留原有 IDE 扩展标识 `you-should-know-me.antigrative-dashboard-ide` 与本地数据目录）。新增像素猫 / 简约速度卡样式切换、额度消耗速率状态与重置前余量线性预测、当前额度周期实测用量参考、Token 用量「本机全部 / 当前账号」范围切换、以及跟随宿主 Appearance 字体的 `--pulse-font` / `--pulse-font-mono` 同步。已在 Windows 11 本机 **Antigravity Desktop 2.32.2** 通过宿主资源/SDK 检查与插件挂载（`v0.9.1`），并完成 Node 482/483（1 skip）、IDE 67/67、Python 95/95（1 skip）及 Edge CDP 端到端浏览器测试。
 
-专用包为 `antigrative-dashboard-ide-0.9.18.vsix`，安装入口与桌面 App 独立。
+专用包为 `antigrative-dashboard-ide-0.9.19.vsix`，安装入口与桌面 App 独立。
 Windows 11 / IDE 2.5.5（VS Code base 1.107.0）已用真实对话验证速率、缓存、上下文、重启历史恢复和窄宽布局。IDE 2.6.0 的控件挂载和真实对话数据已由用户验收；Linux/macOS 的登录后 IDE 界面仍待实机验证。
 Linux/macOS 的 IDE 进程筛选、端口归属、安装打包和 Trusted Types 浏览器 fixture 纳入 CI；登录后的 IDE GUI 仍待实机验收。
 当前仅支持默认用户 profile；私有 Preact/DOM 或 RPC 变化可能需要适配，不能保证未来 IDE 版本无需维护。
