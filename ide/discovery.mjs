@@ -21,13 +21,37 @@ const commandTokens=command=>String(command||'').match(/"([^"\\]*(?:\\.[^"\\]*)*
   return value.replace(/\\(["'])/g,'$1');
 })||[];
 const executableBase=value=>String(value||'').replace(/\\/g,'/').split('/').at(-1)||'';
+const macosIdeBundleExe=/(?:^|\/)Antigravity IDE\.app\/Contents\/MacOS\/(?:Antigravity IDE|Electron)$/i;
+
+function isMacosIdeBundlePath(exePath){
+  const norm=String(exePath||'').replace(/\\/g,'/');
+  if(!macosIdeBundleExe.test(norm))return false;
+  const idx=norm.toLowerCase().lastIndexOf('antigravity ide.app/contents/macos/');
+  return idx>=0&&!/\.app\//i.test(norm.slice(0,idx));
+}
+
+function commandExecutable(command){
+  const raw=String(command||'').trimStart();
+  if(!raw)return '';
+  if(raw[0]==='"'||raw[0]==="'")return commandTokens(raw)[0]||'';
+  // POSIX `ps` prints unquoted paths, so split before CLI flags (` -...`) or
+  // secondary absolute path arguments (` /...`) to preserve spaces in the path.
+  const head=raw.split(/\s+(?=-|\/)/)[0].trimEnd();
+  const bundle=head.match(/^(\/(?:(?:[^/\s]|\s(?!\/|-))+\/)*Antigravity IDE\.app\/Contents\/MacOS\/(?:Antigravity IDE|Electron))(?=\s+(?!Helper(?:\s|\(|$))|$)/i);
+  if(bundle&&isMacosIdeBundlePath(bundle[1]))return bundle[1];
+  const bundledServer=head.match(/^(\/(?:(?:[^/\s]|\s(?!\/|-))+\/)*(?:agy|language_server_(?:macos|linux)_(?:x64|arm|arm64)))(?=\s|$)/i);
+  if(bundledServer&&/(?:Antigravity IDE\.app\/Contents\/|Application Support\/|^\/Users\/)/i.test(bundledServer[1]))return bundledServer[1];
+  const namedIde=head.match(/^((?:\/(?:(?:[^/\s]|\s(?!\/|-))+\/)*)?Antigravity IDE)(?=\s+(?!Helper(?:\s|\(|$))|$)/i);
+  if(namedIde&&!/\.app\//i.test(namedIde[1]))return namedIde[1];
+  return commandTokens(raw)[0]||'';
+}
 
 export const ideServer=row=>/^language_server_(?:windows|linux|macos)_(?:x64|arm|arm64)(?:\.exe)?$/i.test(row.Name||'')
   && flag(row.CommandLine,'subclient_type',{value:'ide'})
   && !flag(row.CommandLine,'enable_lsp')
   && !/(?:^|\s)["']?--enable_lsp(?:=|\s|$)/i.test(row.CommandLine||'');
 export const agyServer=row=>agyExecutable.test(String(row?.Name||''))
-  && agyExecutable.test(executableBase(commandTokens(row?.CommandLine)[0]))
+  && agyExecutable.test(executableBase(commandExecutable(row?.CommandLine)))
   && flag(row?.CommandLine,'hub')
   && !flag(row?.CommandLine,'enable_lsp')
   && !/(?:^|\s)["']?--enable_lsp(?:=|\s|$)/i.test(row?.CommandLine||'');
@@ -38,7 +62,12 @@ export const agyServer=row=>agyExecutable.test(String(row?.Name||''))
 export function ideHubPort(row) {
   if(!agyServer(row))return null;
   const unquote=value=>typeof value==='string'&&value.length>=2&&['"',"'"].includes(value[0])&&value.at(-1)===value[0]?value.slice(1,-1):value;
-  const args=(String(row.CommandLine).match(/"[^"]*"|'[^']*'|[^\s]+/g)||[]).slice(1).map(unquote);let result=null,count=0;
+  const raw=String(row.CommandLine||'').trimStart();
+  const quoted=raw[0]==='"'||raw[0]==="'";
+  const exe=quoted?'':commandExecutable(raw);
+  const rest=!quoted&&exe&&raw.startsWith(exe)?raw.slice(exe.length):raw;
+  const rawTokens=rest.match(/"[^"]*"|'[^']*'|[^\s]+/g)||[];
+  const args=(quoted?rawTokens.slice(1):rawTokens).map(unquote);let result=null,count=0;
   for(let i=0;i<args.length;i++){
     const arg=args[i];if(arg==='--')break;
     const match=arg.match(/^--hub-port(?:=(.*))?$/i);if(!match)continue;
@@ -55,7 +84,8 @@ const legacyIdeRoot=/^(?:Antigravity IDE(?:\.exe)?|antigravity-ide)$/i;
 export const ideRoot=row=>{
   const name=String(row?.Name||'');
   const command=String(row?.CommandLine||'');
-  if(legacyIdeRoot.test(name))return !/(?:^|[\s"]|')--(?:type|utility-sub-type)(?:[=\s"]|$)/i.test(command);
+  const isMacBundle=/^electron$/i.test(name)&&isMacosIdeBundlePath(commandExecutable(command));
+  if(legacyIdeRoot.test(name)||isMacBundle)return !/(?:^|[\s"]|')--(?:type|utility-sub-type)(?:[=\s"]|$)/i.test(command);
   // `agy --hub` is a language-server/hub candidate, never a renderer root.
   return false;
 };
@@ -142,8 +172,8 @@ export async function discoverIdeProcesses(debugPort,{platform=process.platform,
     }
     rows=stdout.split(/\r?\n/).flatMap(line=>{
       const m=line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+)$/);if(!m||Number(m[3])!==uid)return [];
-      const command=m[4];const first=commandTokens(command)[0]||'';const base=executableBase(first);let name;
-      if(/(?:^|\/)Antigravity IDE(?:\s|$)/i.test(command))name='Antigravity IDE';
+      const command=m[4];const exe=commandExecutable(command);const base=executableBase(exe);let name;
+      if(isMacosIdeBundlePath(exe)||/^Antigravity IDE$/i.test(base))name='Antigravity IDE';
       else if(/^(?:antigravity-ide)$/i.test(base))name='antigravity-ide';
       else if(agyExecutable.test(base))name=base;
       else name=base.match(/^language_server_(?:macos|linux)_(?:x64|arm|arm64)$/i)?.[0];

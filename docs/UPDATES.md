@@ -9,18 +9,15 @@ change a CLI status line, update Antigravity itself, or modify account settings.
 Language, theme and usage data are retained. No transcript or account credential
 is included in the public GitHub requests.
 
-## Repository move: one-time manual App update
+## Install or update this fork
 
-Starting with v0.9.1, App update checks use the temporary
-[maintenance repository](https://github.com/ATtacK030130/antigrative-dashboard).
-Versions through v0.8.20 still check the previous repository. If that address is
-unavailable, they cannot discover this move automatically. Download the new
-[release ZIP](https://github.com/ATtacK030130/antigrative-dashboard/releases/latest),
+The App checks stable releases of Antigravity Progress Bar. If your current
+installation checks another repository, download the desktop ZIP from the
+[fork’s releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases),
 extract it, and run `python manage.py install` once (`python3` on Linux/macOS).
-Fully quit and reopen the App; later checks use the new repository. This manual
-installation preserves language preferences and saved statistics, enables the
-plugin and uses the default runtime integration. IDE users install the release
-VSIX separately; CLI users follow [CLI installation](CLI.md).
+Fully quit and reopen the App. The installer keeps language preferences and
+usage history. IDE users install the release VSIX separately. CLI users can
+follow the [CLI installation guide](CLI.md).
 
 The update UI shows measured download bytes/percentage. Checking,
 verification, extraction, backup and installation use an indeterminate bar;

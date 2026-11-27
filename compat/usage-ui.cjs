@@ -437,10 +437,11 @@ function createFallbackPricing() {
       const fullUsdDirect=Number.isFinite(win?.estimatedFullUsd)&&win.estimatedFullUsd>0?win.estimatedFullUsd:null;
       const fullTokDirect=Number.isFinite(win?.estimatedFullTokens)&&win.estimatedFullTokens>0?win.estimatedFullTokens:null;
       if(!fullUsdDirect&&!fullTokDirect){if(win?.observedTokens>0||win?.usedFraction>0)waitingSamples=true;continue;}
-      const rate=rateFor(fam);
+      const winRate=Number.isFinite(win?.observedCostUsd)&&win.observedCostUsd>0&&Number.isFinite(win?.observedTokens)&&win.observedTokens>0?win.observedCostUsd/win.observedTokens:null;
+      const rate=winRate??rateFor(fam);
       const estUsd=fullUsdDirect??(rate!==null&&fullTokDirect?fullTokDirect*rate:null);
       if(estUsd===null)continue;
-      const fullTok=fullUsdDirect!==null&&rate>0?Math.round(fullUsdDirect/rate):fullTokDirect;
+      const fullTok=fullTokDirect??(fullUsdDirect!==null&&rate>0?Math.round(fullUsdDirect/rate):null);
       weeklyTotal+=estUsd;
       pools.push({label:familyLabel(fam),usd:estUsd,fullTokens:fullTok,usedFraction:typeof win.usedFraction==='number'?win.usedFraction:null,costBased:fullUsdDirect!==null});
     }
@@ -1101,7 +1102,7 @@ function createFallbackPricing() {
   }
   function close(){languagePicker.close(false);closeYear(false);clearHover();conceal();opener?.focus({preventScroll:true});}
   $('close').addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
-  const weeklyQuotaSig=data=>{const qw=data?.quotaWindows;if(!qw||typeof qw!=='object')return '';return Object.entries(qw).filter(([k])=>k.endsWith(':weekly')).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`${k}:${Math.round(v?.estimatedFullTokens||0)}:${Math.round((v?.estimatedFullUsd||0)*100)}`).join('|');};
+  const weeklyQuotaSig=data=>{const qw=data?.quotaWindows;if(!qw||typeof qw!=='object')return '';return Object.entries(qw).filter(([k])=>k.endsWith(':weekly')).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>`${k}:${Math.round(v?.estimatedFullTokens||0)}:${Math.round((v?.estimatedFullUsd||0)*100)}:${Math.round((v?.usedFraction||0)*100)}`).join('|');};
   const contentKey=data=>JSON.stringify([{...data,updatedAt:undefined,quotaWindows:undefined,activeAccountKey:undefined,status:undefined,summaryStale:undefined},weeklyQuotaSig(data),language.language,themeSignature(),typeof onScope==='function',pendingScope,scopeLoading]);
   const within=event=>event.composedPath().includes(dialog);
   function containFocus(event){if(!disposed&&dialog.open&&!within(event)){$('locale').focus({preventScroll:true});}}

@@ -27,6 +27,8 @@ Python 3.10+ 仅用于生命周期，无 pip 依赖；后台使用宿主 Node，
 
 ## Antigravity 自带 IDE
 
+2026-11-27 / **v0.9.20** 合入上游 #26 和 #28。周额度按当前账号的额度周期估算，遇到周期中途重置时优先使用重置后的样本。总览与内联栏显示相同的满额 Token 数，双币成本看板沿用原有汇率。macOS 独立 IDE 2.8.0+ 支持路径含空格的 `Antigravity IDE.app` 以及包内名为 `Electron` 的主进程。进程识别由模拟 macOS 进程列表的测试覆盖。
+
 2026-11-26 / **v0.9.19（3D 奶龙输入框上方操作按钮自动避让与横向自由拖动换位）**：针对排队消息卡片（Queued Message 右侧编辑 `✏️` / 删除 `🗑️` 按钮）、待确认操作条及 `/btw` 顶栏等挂载在输入框上方同属底部栏（Composer Dock）的交互按钮，新增非滚动底部栏障碍扫描与迟滞自动横向让位（优先平移至按钮左侧无遮挡区间，全宽占满时自动收起隐藏，队列清空后自动归位；普通聊天滚动区内的消息按钮仍严格豁免防闪烁）；同时新增鼠标按住奶龙沿输入框顶边**左右自由拖动换站位**（自动持久化记忆至 `localStorage`，巡逻散步方向随当前左右余量自动切换）。
 
 2026-11-26 / **v0.9.18（同步上游 v0.9.17–v0.9.18 Remote-SSH 窗口路由与独立 IDE 启动自愈）**：
@@ -59,7 +61,7 @@ Python 3.10+ 仅用于生命周期，无 pip 依赖；后台使用宿主 Node，
 
 2026-11-17 / **v0.9.1**：项目维护与 App 更新源迁移至 `ATtacK030130/antigrative-dashboard`（保留原有 IDE 扩展标识 `you-should-know-me.antigrative-dashboard-ide` 与本地数据目录）。新增像素猫 / 简约速度卡样式切换、额度消耗速率状态与重置前余量线性预测、当前额度周期实测用量参考、Token 用量「本机全部 / 当前账号」范围切换、以及跟随宿主 Appearance 字体的 `--pulse-font` / `--pulse-font-mono` 同步。已在 Windows 11 本机 **Antigravity Desktop 2.32.2** 通过宿主资源/SDK 检查与插件挂载（`v0.9.1`），并完成 Node 482/483（1 skip）、IDE 67/67、Python 95/95（1 skip）及 Edge CDP 端到端浏览器测试。
 
-专用包为 `antigrative-dashboard-ide-0.9.19.vsix`，安装入口与桌面 App 独立。
+专用包为 `antigrative-dashboard-ide-0.9.20.vsix`，安装入口与桌面 App 独立。
 Windows 11 / IDE 2.5.5（VS Code base 1.107.0）已用真实对话验证速率、缓存、上下文、重启历史恢复和窄宽布局。IDE 2.6.0 的控件挂载和真实对话数据已由用户验收；Linux/macOS 的登录后 IDE 界面仍待实机验证。
 Linux/macOS 的 IDE 进程筛选、端口归属、安装打包和 Trusted Types 浏览器 fixture 纳入 CI；登录后的 IDE GUI 仍待实机验收。
 当前仅支持默认用户 profile；私有 Preact/DOM 或 RPC 变化可能需要适配，不能保证未来 IDE 版本无需维护。

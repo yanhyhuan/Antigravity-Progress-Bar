@@ -247,3 +247,43 @@ test('unpriced or partially priced windows fall back to token space without poll
   assert.ok(res.estimatedFullTokens > 0);
   assert.equal(est.accounts.get(ACCT).get('gemini:weekly').priorFullUsd, 100);
 });
+
+test('mid-cycle reset uses post-anchor USD/token rate instead of pre-reset blended window rate (Issue #26)', () => {
+  const est = new QuotaEstimator();
+  // Pre-bounce segment: 400M cheap tokens at $0.25/M ($100) for 50% quota
+  est.estimate(ACCT, weeklySpec(0.50, 29930080), {
+    observedTokens: 400_000_000,
+    observedCostUsd: 100.0,
+    pricedTokens: 400_000_000,
+    requests: 100,
+  });
+  // Mid-cycle reset/top-up within same resetMinute: remaining bounces back to 99% (1% used)
+  est.estimate(ACCT, weeklySpec(0.99, 29930080), {
+    observedTokens: 400_000_000,
+    observedCostUsd: 100.0,
+    pricedTokens: 400_000_000,
+    requests: 100,
+  });
+  // Post-bounce segment uses expensive model at $1.00/M ($50 for 50M tokens -> +25% used => $200 full USD)
+  est.estimate(ACCT, weeklySpec(0.91, 29930080), {
+    observedTokens: 416_000_000,
+    observedCostUsd: 116.0,
+    pricedTokens: 416_000_000,
+    requests: 105,
+  });
+  est.estimate(ACCT, weeklySpec(0.83, 29930080), {
+    observedTokens: 432_000_000,
+    observedCostUsd: 132.0,
+    pricedTokens: 432_000_000,
+    requests: 110,
+  });
+  const res = est.estimate(ACCT, weeklySpec(0.74, 29930080), {
+    observedTokens: 450_000_000,
+    observedCostUsd: 150.0,
+    pricedTokens: 450_000_000,
+    requests: 115,
+  });
+  assert.ok(res.estimatedFullUsd >= 195 && res.estimatedFullUsd <= 205, `expected ~$200 full USD, got ${res.estimatedFullUsd}`);
+  // Post-anchor rate is $1.00/M -> ~200M full tokens (NOT ~600M from pre+post $150/450M=$0.333/M)
+  assert.ok(res.estimatedFullTokens >= 195_000_000 && res.estimatedFullTokens <= 205_000_000, `expected ~200M full tokens, got ${res.estimatedFullTokens}`);
+});

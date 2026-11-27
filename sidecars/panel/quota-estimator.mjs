@@ -539,10 +539,11 @@ export class QuotaEstimator {
       mutated = true;
     }
 
+    let effCost = 0;
     let estimatedFullUsd = null;
     if (costEligible) {
       const canUseCostRatio = !entry.midCycleReset || entry.anchorCostUsd !== null;
-      const effCost = entry.midCycleReset
+      effCost = entry.midCycleReset
         ? (entry.anchorCostUsd !== null ? Math.max(0, count.observedCostUsd - entry.anchorCostUsd) : 0)
         : count.observedCostUsd;
       const costRes = estimateSpace({
@@ -575,9 +576,23 @@ export class QuotaEstimator {
 
     if (mutated && accountKey) this.scheduleSave();
 
-    const convRate = finitePos(recentUsdPerToken)
-      ? recentUsdPerToken
-      : (costEligible && count.observedTokens > 0 ? count.observedCostUsd / count.observedTokens : null);
+    let windowRate = null;
+    if (costEligible) {
+      if (entry.midCycleReset) {
+        if (entry.anchorCostUsd !== null && effTokens > 0 && effCost > 0) {
+          windowRate = effCost / effTokens;
+        } else if (entry.anchorCostUsd === null) {
+          const firstCost = entry.samples.find(s => finitePos(s?.c) && finitePos(s?.t));
+          if (firstCost && count.observedCostUsd > firstCost.c && count.observedTokens > firstCost.t) {
+            windowRate = (count.observedCostUsd - firstCost.c) / (count.observedTokens - firstCost.t);
+          }
+        }
+      }
+      if (!finitePos(windowRate) && count.observedTokens > 0) {
+        windowRate = count.observedCostUsd / count.observedTokens;
+      }
+    }
+    const convRate = finitePos(recentUsdPerToken) ? recentUsdPerToken : windowRate;
     const estimatedFullTokens = estimatedFullUsd !== null && finitePos(convRate)
       ? Math.round(estimatedFullUsd / convRate)
       : tokenRes.estimatedFull;

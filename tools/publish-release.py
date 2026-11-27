@@ -32,9 +32,10 @@ def checked_assets(root, tag):
         raise ValueError('Package checksum mismatch')
     with zipfile.ZipFile(bundle) as archive:
         prefix = 'antigrative-dashboard/'
-        manifest = json.loads(archive.read(prefix + 'plugin.json'))
-        if manifest['version'] != version:
-            raise ValueError('Packaged version differs')
+        for name in ('plugin.json', 'package.json', 'sidecars/panel/package.json', 'ide/package.json'):
+            manifest = json.loads(archive.read(prefix + name))
+            if manifest['version'] != version:
+                raise ValueError(f'Packaged version differs in {name}')
         for required in ['ide/package.json', 'ide/manage.py', 'ide/package.py', 'ide/README.md']:
             archive.getinfo(prefix + required)
         for required in IDE_RUNTIME_MODULES:

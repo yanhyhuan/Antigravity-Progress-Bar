@@ -863,8 +863,9 @@ async function macosTargetIdeApp({ appResources, home = homedir(), env = process
   for (const candidate of candidates) {
     if (!await isRegularDir(candidate)) continue;
     const exe = join(candidate, 'Contents', 'MacOS', 'Antigravity IDE');
+    const electronExe = join(candidate, 'Contents', 'MacOS', 'Electron');
     const product = join(candidate, 'Contents', 'Resources', 'app', 'product.json');
-    if (await isRegularFile(exe) || await isRegularFile(product)) return candidate;
+    if (await isRegularFile(exe) || await isRegularFile(electronExe) || await isRegularFile(product)) return candidate;
   }
   return null;
 }
@@ -926,10 +927,11 @@ export function renderMacosIdeLauncherScript(targetApp, profileDir = null) {
     '  /usr/bin/osascript -e \'display dialog "Antigravity IDE.app was not found." buttons {"OK"} default button 1 with title "Antigravity IDE (Dashboard)"\' >/dev/null 2>&1 || true',
     '  exit 1',
     'fi',
-    'EXE_PATH="$APP_BUNDLE/Contents/MacOS/Antigravity IDE"',
+    'EXE_IDE="$APP_BUNDLE/Contents/MacOS/Antigravity IDE"',
+    'EXE_ELECTRON="$APP_BUNDLE/Contents/MacOS/Electron"',
     'is_running() {',
-    '  /bin/ps -ww -axo pid=,uid=,args= 2>/dev/null | /usr/bin/awk -v uid="$(/usr/bin/id -u)" -v exe="$EXE_PATH" \'',
-    '    $2 == uid && index($0, exe) > 0 && index($0, "Helper") == 0 && $0 !~ /(^|[[:space:]])--type=/ { found = 1; exit 0 }',
+    '  /bin/ps -ww -axo pid=,uid=,args= 2>/dev/null | /usr/bin/awk -v uid="$(/usr/bin/id -u)" -v exe1="$EXE_IDE" -v exe2="$EXE_ELECTRON" \'',
+    '    $2 == uid && (index($0, exe1) > 0 || index($0, exe2) > 0) && index($0, "Helper") == 0 && $0 !~ /(^|[[:space:]])--type=/ { found = 1; exit 0 }',
     '    END { exit(found ? 0 : 1) }',
     '  \'',
     '}',

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:net';
-import {selectIdeServer,ideServer,agyServer,ideRoot,discoverIdeLog,discoverIdeLogPorts,discoverIdeProcesses} from '../discovery.mjs';
+import {selectIdeServer,ideServer,agyServer,ideHubPort,ideRoot,discoverIdeLog,discoverIdeLogPorts,discoverIdeProcesses} from '../discovery.mjs';
 import {validIdeTarget} from '../runtime.mjs';
 import {IdeClient} from '../client.mjs';
 const rows=[
@@ -316,4 +316,58 @@ test('IDE process discovery sanitizes PowerShell and ps command failures and tim
   discoverIdeProcesses(9000,{platform:'darwin',uid:501,run:async()=>{throw genericPsErr;}}),
   err=>{assert.equal(err.message,'Unable to read Antigravity IDE processes');assert.doesNotMatch(err.message,/\/bin\/ps|SECRET/i);return true;},
  );
+});
+
+test('macOS Antigravity IDE Electron binary with unquoted spaces is recognized while Helpers and Desktop app stay excluded (Issue #28)',async()=>{
+ // 1. IDE 2.8.0+ on macOS launches `Antigravity IDE.app/Contents/MacOS/Electron` with unquoted spaces,
+ //    and bundled `agy --hub` can also live under `/Applications/Antigravity IDE.app/Contents/...`.
+ const ps=[
+  '10 1 501 /Applications/Antigravity IDE.app/Contents/MacOS/Electron --remote-debugging-port=0 --remote-debugging-address=127.0.0.1',
+  '15 10 501 /Applications/Antigravity IDE.app/Contents/Frameworks/Electron Helper.app/Contents/MacOS/Electron Helper --type=utility --utility-sub-type=node.mojom.NodeService',
+  '16 10 501 /Applications/Antigravity IDE.app/Contents/Frameworks/Antigravity IDE Helper (Renderer).app/Contents/MacOS/Antigravity IDE Helper (Renderer) --type=renderer',
+  '17 10 501 /Applications/Antigravity IDE.app/Contents/Frameworks/Antigravity IDE Helper.app/Contents/MacOS/Antigravity IDE Helper',
+  '20 15 501 /Applications/Antigravity IDE.app/Contents/Resources/app/bin/agy --hub --hub-port=8000 --csrf_token mac-test',
+  '30 1 501 /Applications/Antigravity.app/Contents/MacOS/Electron --remote-debugging-port=0 --remote-debugging-address=127.0.0.1',
+  '40 1 501 /Applications/Visual Studio Code.app/Contents/MacOS/Electron /Applications/Antigravity IDE.app/Contents/MacOS/Electron --remote-debugging-port=0',
+ ].join('\n');
+ const lsof='p10\nn127.0.0.1:9000\np15\nn127.0.0.1:9000\np17\nn127.0.0.1:9000\np20\nn127.0.0.1:8000\np30\nn127.0.0.1:9001\np40\nn127.0.0.1:9002';
+ const run=async file=>({stdout:file==='/bin/ps'?ps:lsof});
+ const res=await discoverIdeProcesses(9000,{platform:'darwin',uid:501,run});
+ assert.equal(res.rootPid,10);
+ assert.equal(res.ProcessId,20);
+ assert.deepEqual(res.Ports,[8000]);
+ assert.equal(agyServer(res),true);
+ assert.equal(ideHubPort(res),8000);
+ const macClient=new IdeClient({profile:'fixture',debugPort:()=>9000,processes:async()=>res,logPorts:async()=>[]});
+ assert.deepEqual(await macClient.discover(),{pid:20,port:8000,csrf:'mac-test'});
+
+ // Desktop Antigravity.app and another Electron app passing IDE path as arg must be rejected.
+ await assert.rejects(discoverIdeProcesses(9001,{platform:'darwin',uid:501,run}),/does not belong/);
+ await assert.rejects(discoverIdeProcesses(9002,{platform:'darwin',uid:501,run}),/does not belong/);
+
+ // Custom space-containing directory + positional workspace arg + bundled legacy language_server.
+ const psCustom=[
+  '100 1 501 /Users/Jane Doe/Applications/Antigravity IDE.app/Contents/MacOS/Electron /Users/Jane Doe/My Repo --remote-debugging-port=0',
+  '110 100 501 /Users/Jane Doe/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_x64 --subclient_type ide --csrf_token ls-mac',
+ ].join('\n');
+ const resCustom=await discoverIdeProcesses(9100,{platform:'darwin',uid:501,run:async file=>({stdout:file==='/bin/ps'?psCustom:'p100\nn127.0.0.1:9100\np110\nn127.0.0.1:8100'})});
+ assert.equal(resCustom.rootPid,100);
+ assert.equal(resCustom.ProcessId,110);
+ assert.equal(ideServer(resCustom),true);
+
+ // Helper owning the debug port alone (without main process) or nested .app spoofing must fail.
+ const psOnlyHelper=[
+  '17 1 501 /Applications/Antigravity IDE.app/Contents/Frameworks/Antigravity IDE Helper.app/Contents/MacOS/Antigravity IDE Helper',
+  '18 1 501 /Applications/Other.app/Contents/Antigravity IDE.app/Contents/MacOS/Electron --remote-debugging-port=0',
+  '19 1 501 /Applications/Antigravity IDE.app/Contents/MacOS/Electron --type=gpu-process',
+ ].join('\n');
+ await assert.rejects(discoverIdeProcesses(9200,{platform:'darwin',uid:501,run:async file=>({stdout:file==='/bin/ps'?psOnlyHelper:'p17\nn127.0.0.1:9200'})}),/Waiting for Antigravity IDE|does not belong/);
+ await assert.rejects(discoverIdeProcesses(9201,{platform:'darwin',uid:501,run:async file=>({stdout:file==='/bin/ps'?psOnlyHelper:'p18\nn127.0.0.1:9201'})}),/Waiting for Antigravity IDE|does not belong/);
+ await assert.rejects(discoverIdeProcesses(9202,{platform:'darwin',uid:501,run:async file=>({stdout:file==='/bin/ps'?psOnlyHelper:'p19\nn127.0.0.1:9202'})}),/Waiting for Antigravity IDE|does not belong/);
+
+ // Direct ideRoot checks with Name='Electron'.
+ assert.equal(ideRoot({Name:'Electron',CommandLine:'/Applications/Antigravity IDE.app/Contents/MacOS/Electron -psn_0_12345 --remote-debugging-port=0'}),true);
+ assert.equal(ideRoot({Name:'Electron',CommandLine:'/Applications/Antigravity IDE.app/Contents/MacOS/Electron --type=gpu-process'}),false);
+ assert.equal(ideRoot({Name:'Electron',CommandLine:'/Applications/Antigravity.app/Contents/MacOS/Electron --remote-debugging-port=0'}),false);
+ assert.equal(ideRoot({Name:'Electron',CommandLine:'/Applications/Visual Studio Code.app/Contents/MacOS/Electron /Applications/Antigravity IDE.app/Contents/MacOS/Electron'}),false);
 });

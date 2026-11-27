@@ -394,3 +394,49 @@ test('DesktopUsage with pricing enabled attaches dual-currency PricingService sn
   assert.equal(signedOut.accountAvailable,false);
   assert.equal(typeof signedOut.pricing?.exchangeRate,'number');
 });
+
+test('weekly estimatedFullTokens uses active window rate after global reset and stays invariant across local vs account scope (Issue #26)',async t=>{
+  const ledger=await fixture(t);
+  const acctA=scope('issue26-account-A'),acctB=scope('issue26-account-B');
+  // Global reset opened a fresh weekly window starting 2026-11-24T00:00:00Z (resetAt = 2026-12-01T00:00:00Z).
+  const now=Date.parse('2026-11-25T12:00:00Z');
+  const weekReset='2026-12-01T00:00:00Z';
+  const groups=[{id:'gemini',name:'Gemini',windows:{weekly:{available:true,remaining:0.396,resetAt:weekReset}}}];
+
+  // Pre-reset usage within the last 7 calendar days (2026-11-21) using very cheap Flash-Lite (~$0.015/M).
+  await ledger.ingest(acctA,id,raw({
+    model:'Gemini 2.5 Flash-Lite',
+    start:'2026-11-21T10:00:00Z',
+    usage:{responseId:'pre-reset-cheap',inputTokens:'5000000',cacheReadTokens:'490000000',cacheWriteTokens:'0',outputTokens:'5000000'},
+  }));
+  // Post-reset usage inside [2026-11-24T00:00:00Z, 2026-12-01T00:00:00Z] using Gemini 4 Neon (132.6M tokens).
+  await ledger.ingest(acctA,other,raw({
+    model:'Gemini 4 Neon (XHigh)',
+    start:'2026-11-25T08:00:00Z',
+    usage:{responseId:'post-reset-neon',inputTokens:'12600000',cacheReadTokens:'117000000',cacheWriteTokens:'0',outputTokens:'3000000'},
+  }));
+  // Another local account with massive ultra-cheap traffic inside the same calendar week.
+  const foreignCid='66666666-6666-4666-8666-666666666666';
+  await ledger.ingest(acctB,foreignCid,raw({
+    model:'Gemini 2.5 Flash-Lite',
+    start:'2026-11-25T09:00:00Z',
+    usage:{responseId:'foreign-cheap',inputTokens:'1000000',cacheReadTokens:'900000000',cacheWriteTokens:'0',outputTokens:'1000000'},
+  }));
+
+  const acctSummary=await ledger.summary(acctA,now,{groups,quotaAccount:acctA});
+  const localSummary=await ledger.summary('all',now,{groups,quotaAccount:acctA});
+  const winAcct=acctSummary.quotaWindows['gemini:weekly'];
+  const winLocal=localSummary.quotaWindows['gemini:weekly'];
+
+  assert.equal(winAcct.observedTokens,132_600_000);
+  // Expected proportional full tokens: 132.6M / 0.604 ~= 219.54M (NOT inflated by pre-reset Flash-Lite days!)
+  const expectedFull=Math.round(132_600_000/0.604);
+  assert.ok(Math.abs(winAcct.estimatedFullTokens-expectedFull)<=5000,`expected ~${expectedFull}, got ${winAcct.estimatedFullTokens}`);
+  const impliedUsed=winAcct.observedTokens/winAcct.estimatedFullTokens;
+  assert.ok(Math.abs(impliedUsed-0.604)<0.005,`observed/full ratio (${impliedUsed}) must align with usedFraction (0.604)`);
+
+  // Switching to local ("all") scope must yield identical weekly full estimates for quotaAccount.
+  assert.equal(winLocal.observedTokens,winAcct.observedTokens);
+  assert.equal(winLocal.estimatedFullUsd,winAcct.estimatedFullUsd);
+  assert.equal(winLocal.estimatedFullTokens,winAcct.estimatedFullTokens);
+});

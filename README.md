@@ -6,7 +6,7 @@
 
 Compact inline token throughput, cache hit rate, context window, and quota forecasts right beside the Antigravity model selector — enhanced with **CNY / USD cost analytics**, **24h hourly activity**, **3D Nailoong companion**, and **Windows task completion notifications**.
 
-[![Version 0.9.19](https://img.shields.io/badge/version-0.9.19-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
+[![Version 0.9.20](https://img.shields.io/badge/version-0.9.20-91adff?style=flat-square&labelColor=252936)](CHANGELOG.md)
 [![Platforms](https://img.shields.io/badge/host-Windows%20%7C%20Linux%20%7C%20macOS-83d8b9?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
 [![Antigravity 2.35.0](https://img.shields.io/badge/Antigravity-2.35.0-c5a0ff?style=flat-square&labelColor=252936)](COMPATIBILITY.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-d4d9e6?style=flat-square&labelColor=252936)](LICENSE)
@@ -40,6 +40,8 @@ Compact inline token throughput, cache hit rate, context window, and quota forec
 ---
 
 ## Features
+
+Weekly capacity uses the active account’s current quota cycle. After a mid-cycle reset, the estimate uses the cost and tokens observed since the reset when available. The overview and inline strip show the same full-token estimate. On macOS, standalone IDE discovery also supports the Electron executable in `Antigravity IDE.app` and installation paths containing spaces.
 
 - **Inline Status Strip, Minimal Bar Collapse & Smooth Speed Card** — Displays weighted session TPS, last-request TPS, peak speed, average TTFT, and model/tool durations without leaving the chat input. Switch between **Pixel Cat** and **Minimal** speed card styles (both with a smooth monotone-spline waveform), or collapse the strip into an ultra-compact **Minimal bar** (`< ○ 47%`, compressing down to `24px` in narrow/subagent panes) with one click. Cold-start and transient reconnect states keep your last live numbers visible without disappearing.
 - **Context Window & Hybrid USD Cost-Space Quota Forecasts** — Tracks host-reported context occupancy (`75%` warning / `90%` critical ring colors) alongside a recorded compaction badge (`🗜 N×`). Automatically matches **Gemini**, **Gemini (Argon)**, and **Claude / GPT** quota buckets (accurately routing cross-vendor `Orchestrator` sub-planners, `Neon` codenames, and `(XHigh)` / `(Max)` effort variants in Antigravity `2.34.0+`), showing 5-hour and weekly reset countdowns, linear depletion forecasts, and hybrid Bayesian full-capacity estimates calibrated in both token and official API USD cost space.
@@ -143,7 +145,7 @@ On Windows, the bundled `Stop` hook notifies you when a turn finishes after `min
 
 ### Antigravity Standalone IDE (VSIX)
 
-Download `antigrative-dashboard-ide-0.9.19.vsix` from [Releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases) and select **Install from VSIX…** in the Antigravity IDE Extensions view. Supports automatic launch-flag detection and repair (`Antigrative Dashboard: Repair IDE Launch Flags`) as well as Remote-SSH IDE windows; fully quit and reopen the IDE after setup. See [ide/README.md](ide/README.md) for full setup and rollback details.
+Download `antigrative-dashboard-ide-0.9.20.vsix` from [Releases](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases) and select **Install from VSIX…** in the Antigravity IDE Extensions view. Supports automatic launch-flag detection and repair (`Antigrative Dashboard: Repair IDE Launch Flags`) as well as Remote-SSH IDE windows; fully quit and reopen the IDE after setup. See [ide/README.md](ide/README.md) for full setup and rollback details.
 
 ### Antigravity CLI (`agy`) Status Line & `#usage` Hook
 

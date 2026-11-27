@@ -141,7 +141,7 @@ test('ensureIdeLaunchConfig repairs overwritten Windows IDE shortcuts, Linux des
   assert.ok(linuxText.includes('--remote-debugging-port=0 --remote-debugging-address=127.0.0.1 %F'));
   assert.ok(linuxText.includes(DESKTOP_MANAGED_MARKER));
 
-  // macOS
+  // macOS (IDE 2.8.0+ ships Electron binary inside Antigravity IDE.app/Contents/MacOS/Electron)
   const macRoot = await mkdtemp(join(tmpdir(), 'ag-ide-mac-'));
   t.after(() => rm(macRoot, { recursive: true, force: true }));
   const macHome = join(macRoot, 'home');
@@ -149,8 +149,7 @@ test('ensureIdeLaunchConfig repairs overwritten Windows IDE shortcuts, Linux des
   const targetApp = join(macApps, 'Antigravity IDE.app');
   await mkdir(join(targetApp, 'Contents', 'MacOS'), { recursive: true });
   await mkdir(join(targetApp, 'Contents', 'Resources', 'app'), { recursive: true });
-  await writeFile(join(targetApp, 'Contents', 'MacOS', 'Antigravity IDE'), 'bin');
-  await writeFile(join(targetApp, 'Contents', 'Resources', 'app', 'product.json'), '{"applicationName":"antigravity-ide"}');
+  await writeFile(join(targetApp, 'Contents', 'MacOS', 'Electron'), 'bin');
   const macRepaired = await ensureIdeLaunchConfig({
     platform: 'darwin',
     home: macHome,
@@ -162,7 +161,10 @@ test('ensureIdeLaunchConfig repairs overwritten Windows IDE shortcuts, Linux des
   const bundle = join(macHome, 'Applications', IDE_MACOS_LAUNCHER_NAME);
   assert.deepEqual(macRepaired, { configured: true, repaired: true, supported: true, entrypoints: [bundle] });
   assert.ok((await readFile(join(bundle, 'Contents', 'Info.plist'), 'utf8')).includes(MACOS_MANAGED_PLIST_KEY));
-  assert.ok((await readFile(join(bundle, 'Contents', 'MacOS', 'launcher'), 'utf8')).includes('--remote-debugging-port=0 --remote-debugging-address=127.0.0.1'));
+  const macScript = await readFile(join(bundle, 'Contents', 'MacOS', 'launcher'), 'utf8');
+  assert.ok(macScript.includes('--remote-debugging-port=0 --remote-debugging-address=127.0.0.1'));
+  assert.ok(macScript.includes('Contents/MacOS/Antigravity IDE'));
+  assert.ok(macScript.includes('Contents/MacOS/Electron'));
 });
 
 test('ensureIdeRendererReady handles stale ports with prompt, auto and off self-heal policies cleanly', async () => {

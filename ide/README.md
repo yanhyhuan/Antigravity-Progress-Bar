@@ -40,8 +40,8 @@ implemented. The desktop App and CLI retain their separate installers.
 
 ## Install a downloaded VSIX
 
-Download `antigrative-dashboard-ide-0.9.1.vsix` and its `.vsix.sha256` from the
-[release](https://github.com/ATtacK030130/antigrative-dashboard/releases/tag/v0.9.1).
+Download `antigrative-dashboard-ide-0.9.20.vsix` and its `.vsix.sha256` from the
+[release](https://github.com/yanhyhuan/Antigravity-Progress-Bar/releases/tag/v0.9.20).
 In Antigravity IDE, open Extensions, choose **Install from VSIX…** from the
 Extensions menu and select the file. No desktop App installation is required.
 
@@ -69,18 +69,19 @@ The debugger binds to localhost only; do not expose it to the network.
 
 ## Install / launch / uninstall from the source ZIP
 
-Download and extract `antigrative-dashboard-0.9.1.zip`, and download the VSIX to a
+Download and extract `antigrative-dashboard-0.9.20.zip`, and download the VSIX to a
 known location. Python 3.10+ is needed for this optional helper; it uses the IDE's
 bundled runtime and needs no separately installed Node.js or third-party packages.
 
 ```powershell
-python ide/manage.py install --exe 'D:\Antigravity IDE\Antigravity IDE.exe' --vsix 'C:\Downloads\antigrative-dashboard-ide-0.9.1.vsix'
+python ide/manage.py install --exe 'D:\Antigravity IDE\Antigravity IDE.exe' --vsix 'C:\Downloads\antigrative-dashboard-ide-0.9.20.vsix'
 python ide/manage.py launch --exe 'D:\Antigravity IDE\Antigravity IDE.exe'
 python ide/manage.py uninstall --exe 'D:\Antigravity IDE\Antigravity IDE.exe'
 ```
 
-Use `python3` on Linux/macOS. macOS `--exe` points to the executable inside
-`Antigravity IDE.app/Contents/MacOS/Antigravity IDE`, not to the `.app` directory.
+Use `python3` on Linux/macOS. On macOS, pass the executable inside
+`Antigravity IDE.app/Contents/MacOS/` to `--exe`. Its name is `Electron` or
+`Antigravity IDE`, depending on the installed IDE version.
 Linux `--exe` points to the actual Electron executable, not a shell wrapper.
 `launch --workspace /path/to/project` optionally opens a workspace.
 Developers can build their own version with `python ide/package.py`.

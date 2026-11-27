@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.20 — 2026-11-27
+
+- Fix weekly quota estimates after a reset or when switching between local and account views (upstream #26). Convert the estimated full USD amount to tokens at the active window’s rate, using post-reset samples when available. The overview uses the same token estimate as the strip and refreshes when estimated cost or quota usage changes. The dashboard continues to show USD and CNY.
+- Recognize the standalone macOS IDE when its executable is named `Electron` or `Antigravity IDE` (upstream #28). Discovery and launch checks support paths containing spaces and distinguish the IDE from helpers and other Electron apps.
+
 ## 0.9.19 — 2026-11-26
 
 - **3D Nailoong composer-dock button auto-avoidance & free horizontal rim drag (`compat/inline-widget.cjs`):** Automatically detect interactive controls (`button`, `[role="button"]`, links, inputs) mounted in composer-dock sibling bars immediately above `.surface-composer` — such as **Queued Message** edit/delete (`✏️` / `🗑️`) buttons, pending review bars, and `/btw` headers — while ignoring scrolling chat message containers; automatically slide Nailoong horizontally along the composer rim to a button-free slot (`>= 6px` clearance with hysteresis, hiding cleanly only when a full-width toolbar leaves zero room) and restore home position once the bar clears. Add smooth horizontal pointer dragging (`gestureMode = 'dragX'`) along the composer top border persisted in `localStorage` (`ag-pulse-nailong-v3-rx`), with adaptive left/right Rim-Patrol direction based on available rim span.
